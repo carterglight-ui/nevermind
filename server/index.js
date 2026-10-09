@@ -13,6 +13,7 @@ import { writeBriefing } from './briefings.js';
 import { startScheduler, washingtonShift, nudge } from './scheduler.js';
 import { saveSubscription, vapidPublicKey } from './push.js';
 import { syncInbox } from './integrations/gmail.js';
+import { progress } from './progress.js';
 
 if (process.env.NODE_ENV === 'production' && !config.passcode) {
   console.error('APP_PASSCODE must be set in production.');
@@ -219,6 +220,7 @@ app.get('/api/activity', (req, res) => {
 });
 app.get('/api/clients', (req, res) => res.json(all('SELECT * FROM clients ORDER BY stage, name')));
 app.get('/api/usage', (req, res) => res.json(budgetStatus()));
+app.get('/api/progress', (req, res) => res.json(progress()));
 
 app.get('/api/notes', (req, res) => res.json(all('SELECT * FROM notes ORDER BY topic')));
 app.post('/api/notes', (req, res) => {

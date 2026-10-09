@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, timeAgo } from '../api.js';
+import { api, timeAgo, PREVIEW } from '../api.js';
 
 const WHO = { ren: 'Master Ren', washington: 'Washington', milo: 'Milo', felix: 'Felix', ollie: 'Ollie', cleo: 'Cleo', wren: 'Wren' };
 const KIND = { email: 'Email draft', content: 'Deliverable', idea: 'Idea' };
@@ -46,14 +46,14 @@ function ReviewCard({ item, notify, onChanged }) {
       )}
       <textarea className="body" rows={item.kind === 'email' ? 9 : 12} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} onBlur={save} />
 
-      {item.kind === 'email' ? (
+      {item.kind === 'email' && !PREVIEW ? (
         <div className="row wrap">
           <a className="btn primary" href={gmailLink} onClick={save}>Open in Gmail</a>
           <a className="btn" href={mailLink} onClick={save}>Mail app</a>
           <button className="btn" onClick={copy}>Copy</button>
         </div>
       ) : (
-        <div className="row wrap"><button className="btn" onClick={copy}>Copy</button></div>
+        <div className="row wrap"><button className="btn primary" onClick={copy}>Copy{item.kind === 'email' ? ' email' : ''}</button></div>
       )}
       <p className="muted small">Nevermind never sends anything. Open it in your mail app, check it, and send it yourself.</p>
 

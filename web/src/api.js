@@ -1,4 +1,7 @@
-// Talking to Nevermind HQ.
+// Talking to Nevermind HQ, or (in the preview build) to the in-browser preview office.
+import * as preview from './preview/backend.js';
+
+export const PREVIEW = import.meta.env.VITE_PREVIEW === '1';
 const KEY = 'nevermind-passcode';
 
 export const getPasscode = () => {
@@ -11,6 +14,7 @@ export const setPasscode = (v) => {
 export class AuthError extends Error {}
 
 export async function api(path, { method = 'GET', body } = {}) {
+  if (PREVIEW) return preview.handle(path, method, body);
   const res = await fetch(`/api${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', 'x-passcode': getPasscode() },
@@ -22,6 +26,7 @@ export async function api(path, { method = 'GET', body } = {}) {
 }
 
 export function subscribe(onEvent) {
+  if (PREVIEW) return preview.subscribe(onEvent);
   const es = new EventSource(`/api/events?key=${encodeURIComponent(getPasscode())}`);
   for (const type of ['staff', 'task', 'review', 'activity', 'briefing', 'chat', 'company']) {
     es.addEventListener(type, (e) => onEvent(type, JSON.parse(e.data)));

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, parseTs } from '../api.js';
+import { api, parseTs, PREVIEW } from '../api.js';
 
 const KIND = { morning: 'Morning', evening: 'Evening', weekly: 'Weekly' };
 
@@ -25,7 +25,9 @@ export function Briefings({ tick, notify }) {
   return (
     <div>
       <div className="dialog">
-        Ren briefs you at <b>7:00 AM</b> every day (a deeper one on Mondays) and wraps up at <b>7:00 PM</b>.
+        {PREVIEW
+          ? <>In your own office Ren briefs you at <b>7:00 AM</b> (deeper on Mondays) and <b>7:00 PM</b>. Here, ask for one any time.</>
+          : <>Ren briefs you at <b>7:00 AM</b> every day (a deeper one on Mondays) and wraps up at <b>7:00 PM</b>.</>}
       </div>
       <button className="btn" disabled={asking} onClick={askNow}>{asking ? 'Ren is writing…' : 'Ask Ren for an update now'}</button>
       {items && !items.length && <p className="muted center">No briefings yet. The first one arrives at the next 7:00.</p>}

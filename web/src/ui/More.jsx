@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, enablePush, setPasscode } from '../api.js';
+import { api, enablePush, setPasscode, PREVIEW } from '../api.js';
+import { resetPreview } from '../preview/backend.js';
 
 const NAME = { ren: 'Ren', washington: 'Washington', milo: 'Milo', felix: 'Felix', ollie: 'Ollie', cleo: 'Cleo', wren: 'Wren' };
 
@@ -38,6 +39,26 @@ export function More({ state, reload, notify }) {
 
   const conn = state.integrations;
   const b = state.budget;
+
+  if (PREVIEW) {
+    return (
+      <div>
+        <div className="dialog">
+          This is the preview office. The team does real work through your Claude plan while this page is open. To give them your Gmail and calendar and keep them working around the clock, set up your own office (SETUP.md).
+        </div>
+        <NoteEditor topic="owner: about me" label="About you (the team reads this)" placeholder="Your name, what you do, your clients, how you like to sound in emails…" notes={notes} notify={notify} />
+        <NoteEditor topic="owner: ground rules" label="Ground rules" placeholder="e.g. Keep client emails under 150 words…" notes={notes} notify={notify} />
+        <div className="section">
+          <div className="row wrap">
+            {state.companyPaused
+              ? <button className="btn primary" onClick={() => call('/company/resume', 'Everyone is back to work.')}>Resume company</button>
+              : <button className="btn danger" onClick={() => call('/company/pause', 'Everyone has stopped.')}>Pause everyone</button>}
+            <button className="btn ghost" onClick={() => { resetPreview(); location.reload(); }}>Start the preview over</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

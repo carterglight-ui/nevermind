@@ -6,6 +6,24 @@ Nevermind is a personal AI company you watch and direct from your iPhone. Seven 
 
 **Getting it running:** see [SETUP.md](SETUP.md).
 
+## How it plays
+
+It plays like a handheld RPG (old Pokémon, a bit of Among Us):
+
+- **Walk** with the thumbstick (bottom left). Walk up to someone and press **A** to talk. You get a dialogue box with a menu: TALK, NEW TASK, THEIR WORK, PAUSE/RESUME, STOP TASK.
+- **Stations:** the **Printer** is where drafts come out for your review, **Ren's scroll** holds briefings, the **Bulletin board** is the activity log, and the **Mail terminal** shows what the team can see of your accounts. A "!" means something is waiting.
+- **START** opens the menu (TEAM, REVIEW, BRIEFINGS, LOG, MAIL, OPTIONS). **MAP** zooms out to the whole floor.
+- **XP only comes from real results:** +20 for a finished task, +50 when you approve their work, +10 per briefing. As the company levels up, the office gets upgrades (plants, gallery wall, arcade cabinet, trophy).
+
+There are two builds of the same game:
+
+| | Preview office (Claude link) | Your office (Railway server) |
+|---|---|---|
+| Brains | Your Claude plan | Your Anthropic API key |
+| Gmail / calendar | No | Yes, read-only |
+| Works when the app is closed | No | Yes, around the clock, with 7 AM / 7 PM briefings |
+| Build | `npm run build:preview` | `npm run build` |
+
 ## Phase 1: The Office Opens (this version)
 
 | Who | Status | What they do now |

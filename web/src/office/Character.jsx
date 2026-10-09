@@ -1,231 +1,54 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LOOKS } from '../staffLook.js';
-import { DESKS, HANGOUTS, route } from './layout.js';
+import { DESKS, HANGOUTS, STATIONS, route, slide } from './layout.js';
+import { Chibi } from './models.jsx';
+import { game, setNear } from '../game.js';
 
 const WALK_SPEED = 1.5;
-
-function mat(color, opts = {}) {
-  return <meshStandardMaterial color={color} roughness={0.75} {...opts} />;
-}
-
-function Hair({ look }) {
-  const c = look.hairColor;
-  switch (look.hair) {
-    case 'slick':
-      return (
-        <group>
-          <mesh position={[0, 0.16, -0.04]} scale={[1.04, 0.8, 1.04]} castShadow>
-            <sphereGeometry args={[0.46, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />{mat(c)}
-          </mesh>
-          <mesh position={[0.12, 0.5, 0.2]} rotation={[0.5, 0, -0.3]} scale={[1.4, 0.55, 0.9]} castShadow>
-            <sphereGeometry args={[0.16, 12, 10]} />{mat(c)}
-          </mesh>
-        </group>
-      );
-    case 'side':
-      return (
-        <group>
-          <mesh position={[0, 0.14, -0.03]} scale={[1.05, 0.78, 1.05]} castShadow>
-            <sphereGeometry args={[0.46, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />{mat(c)}
-          </mesh>
-          <mesh position={[-0.12, 0.44, 0.24]} rotation={[0.3, 0, 0.5]} scale={[1.6, 0.45, 0.8]} castShadow>
-            <sphereGeometry args={[0.15, 12, 10]} />{mat(c)}
-          </mesh>
-        </group>
-      );
-    case 'messy':
-    case 'curly':
-      return (
-        <group>
-          <mesh position={[0, 0.14, -0.03]} scale={[1.06, 0.82, 1.06]} castShadow>
-            <sphereGeometry args={[0.47, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />{mat(c)}
-          </mesh>
-          {[[-0.2, 0.5, 0.15], [0.05, 0.56, 0.18], [0.25, 0.48, 0.1], [-0.05, 0.52, -0.15], [0.3, 0.38, -0.12], [-0.32, 0.36, 0]].map((p, i) => (
-            <mesh key={i} position={p} castShadow>
-              <sphereGeometry args={[look.hair === 'curly' ? 0.13 : 0.15, 10, 8]} />{mat(c)}
-            </mesh>
-          ))}
-        </group>
-      );
-    case 'long':
-      return (
-        <group>
-          <mesh position={[0, 0.12, -0.02]} scale={[1.07, 0.85, 1.07]} castShadow>
-            <sphereGeometry args={[0.47, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />{mat(c)}
-          </mesh>
-          <mesh position={[0, -0.32, -0.16]} castShadow>
-            <boxGeometry args={[0.98, 1.05, 0.5]} />{mat(c)}
-          </mesh>
-          {[-1, 1].map((s) => (
-            <mesh key={s} position={[0.43 * s, -0.25, 0.12]} castShadow>
-              <boxGeometry args={[0.13, 1.0, 0.3]} />{mat(c)}
-            </mesh>
-          ))}
-        </group>
-      );
-    case 'bob':
-      return (
-        <group>
-          <mesh position={[0, 0.1, -0.02]} scale={[1.1, 0.95, 1.08]} castShadow>
-            <sphereGeometry args={[0.47, 24, 16, 0, Math.PI * 2, 0, Math.PI / 1.65]} />{mat(c)}
-          </mesh>
-          {[-1, 1].map((s) => (
-            <mesh key={s} position={[0.42 * s, -0.12, 0.05]} castShadow>
-              <boxGeometry args={[0.16, 0.5, 0.62]} />{mat(c)}
-            </mesh>
-          ))}
-        </group>
-      );
-    default:
-      return null;
-  }
-}
-
-function Face({ look, blink }) {
-  const eyeY = 0.0;
-  const z = 0.43;
-  const happy = look.eyes === 'happy';
-  return (
-    <group>
-      {[-1, 1].map((s) => (
-        <group key={s} position={[0.16 * s, eyeY, z]}>
-          {happy ? (
-            <mesh rotation={[0, 0, 0]}>
-              <torusGeometry args={[0.06, 0.016, 6, 12, Math.PI]} />{mat('#1a1a1a')}
-            </mesh>
-          ) : (
-            <mesh scale={[1, blink ? 0.12 : look.eyes === 'half' ? 0.75 : 1, 1]}>
-              <sphereGeometry args={[0.065, 12, 10]} />{mat('#141414', { roughness: 0.3 })}
-            </mesh>
-          )}
-          {!happy && !blink && (
-            <mesh position={[0.02 * s, 0.025, 0.05]}>
-              <sphereGeometry args={[0.018, 6, 6]} />{mat('#ffffff')}
-            </mesh>
-          )}
-          {/* brow */}
-          <mesh position={[0, 0.13, -0.01]} rotation={[0, 0, look.eyes === 'stern' ? -0.35 * s : look.eyes === 'sly' ? 0.15 * s : 0]}>
-            <boxGeometry args={[0.15, 0.03, 0.02]} />{mat(look.hairColor || '#4a3020')}
-          </mesh>
-        </group>
-      ))}
-      {/* mouth */}
-      {look.eyes === 'stern' || look.eyes === 'half' ? (
-        <mesh position={[0, -0.18, z - 0.01]}>
-          <boxGeometry args={[0.08, 0.018, 0.01]} />{mat('#5a3328')}
-        </mesh>
-      ) : (
-        <mesh position={[0, -0.16, z - 0.02]} rotation={[0, 0, Math.PI]}>
-          <torusGeometry args={[0.05, 0.012, 6, 12, Math.PI]} />{mat('#5a3328')}
-        </mesh>
-      )}
-      {look.glasses &&
-        [-1, 1].map((s) => (
-          <mesh key={s} position={[0.16 * s, eyeY, z + 0.03]}>
-            <torusGeometry args={[0.11, 0.02, 8, 24]} />{mat('#111')}
-          </mesh>
-        ))}
-      {/* cheeks */}
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[0.27 * s, -0.1, 0.36]}>
-          <sphereGeometry args={[0.05, 8, 8]} />{mat('#f3a6a0', { transparent: true, opacity: 0.35 })}
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function Body({ look, armsRef, legsRef }) {
-  return (
-    <group>
-      {/* torso */}
-      <mesh position={[0, 0.62, 0]} castShadow>
-        <capsuleGeometry args={[look.robe ? 0.36 : 0.32, 0.32, 6, 16]} />{mat(look.top)}
-      </mesh>
-      {look.robe && (
-        <mesh position={[0, 0.3, 0]} castShadow>
-          <cylinderGeometry args={[0.36, 0.44, 0.5, 18]} />{mat(look.top)}
-        </mesh>
-      )}
-      {/* shirt + tie */}
-      {!look.robe && look.shirt !== look.top && (
-        <mesh position={[0, 0.82, 0.24]} rotation={[0.3, 0, 0]}>
-          <boxGeometry args={[0.2, 0.22, 0.05]} />{mat(look.shirt)}
-        </mesh>
-      )}
-      {look.tie && (
-        <mesh position={[0, 0.68, 0.315]} rotation={[0.12, 0, 0]}>
-          <boxGeometry args={[0.07, 0.32, 0.02]} />{mat(look.tie)}
-        </mesh>
-      )}
-      {look.beads && (
-        <group position={[0, 0.82, 0.04]} rotation={[0.35, 0, 0]}>
-          {Array.from({ length: 16 }).map((_, i) => {
-            const a = (i / 16) * Math.PI * 2;
-            return (
-              <mesh key={i} position={[Math.sin(a) * 0.3, Math.cos(a) * 0.16 - 0.05, Math.cos(a) * 0.2 + 0.08]}>
-                <sphereGeometry args={[0.04, 8, 6]} />{mat(look.beads, { roughness: 0.4 })}
-              </mesh>
-            );
-          })}
-        </group>
-      )}
-      {/* arms */}
-      <group ref={armsRef}>
-        {[-1, 1].map((s) => (
-          <group key={s} position={[0.38 * s, 0.82, 0]} name={s < 0 ? 'armL' : 'armR'}>
-            <mesh position={[0, -0.2, 0]} castShadow>
-              <capsuleGeometry args={[0.085, 0.25, 4, 10]} />{mat(look.top)}
-            </mesh>
-            <mesh position={[0, -0.42, 0]}>
-              <sphereGeometry args={[0.085, 10, 8]} />{mat(look.skin)}
-            </mesh>
-          </group>
-        ))}
-      </group>
-      {/* legs */}
-      <group ref={legsRef}>
-        {[-1, 1].map((s) => (
-          <group key={s} position={[0.14 * s, 0.3, 0]} name={s < 0 ? 'legL' : 'legR'}>
-            {!look.robe && (
-              <mesh position={[0, -0.12, 0]} castShadow>
-                <cylinderGeometry args={[0.11, 0.1, 0.28, 10]} />{mat(look.pants)}
-              </mesh>
-            )}
-            <mesh position={[0, -0.26, 0.05]} castShadow>
-              <boxGeometry args={[0.18, 0.09, 0.28]} />{mat(look.hair === 'curly' ? '#f4f4f4' : '#141416', { roughness: 0.4 })}
-            </mesh>
-          </group>
-        ))}
-      </group>
-    </group>
-  );
-}
-
-function Headphones({ color }) {
-  return (
-    <group>
-      <mesh position={[0, 0.06, 0]}>
-        <torusGeometry args={[0.5, 0.035, 8, 24, Math.PI]} />{mat(color === '#f4f4f4' ? '#f4f4f4' : '#1d1d22')}
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[0.47 * s, 0.0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.14, 0.14, 0.12, 16]} />{mat(color)}
-        </mesh>
-      ))}
-    </group>
-  );
-}
+const PLAYER_SPEED = 3.2;
+const TALK_RANGE = 2.4;
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+function animateLimbs(t, dt, mode, armsRef, legsRef, bodyRef) {
+  const [armL, armR] = armsRef.current.children;
+  const [legL, legR] = legsRef.current.children;
+  bodyRef.current.position.y = mode === 'walk' ? Math.abs(Math.sin(t * 10)) * 0.06 : mode === 'type' ? Math.sin(t * 18) * 0.008 : Math.sin(t * 2) * 0.01;
+  if (mode === 'walk') {
+    const swing = Math.sin(t * 10) * 0.6;
+    armL.rotation.x = swing; armR.rotation.x = -swing;
+    legL.rotation.x = -swing; legR.rotation.x = swing;
+  } else if (mode === 'type') {
+    armL.rotation.x = -1.1 + Math.sin(t * 22) * 0.12;
+    armR.rotation.x = -1.1 + Math.sin(t * 22 + 1.7) * 0.12;
+    legL.rotation.x = legR.rotation.x = 0;
+  } else if (mode === 'wave') {
+    armR.rotation.x = 0;
+    armR.rotation.z = -2.6 + Math.sin(t * 8) * 0.3;
+    armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, 0, dt * 6);
+    legL.rotation.x = legR.rotation.x = 0;
+    return;
+  } else {
+    armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, 0, dt * 6);
+    armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, 0, dt * 6);
+    legL.rotation.x = legR.rotation.x = 0;
+  }
+  armR.rotation.z = THREE.MathUtils.lerp(armR.rotation.z, 0, dt * 8);
+}
+
+function turnToward(group, face, dt) {
+  let diff = face - group.rotation.y;
+  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+  group.rotation.y += diff * Math.min(1, dt * 8);
+}
 
 /**
  * One employee. `state` comes from the server: status (idle | working | paused),
  * activity (what they're doing) and bubble (what they last said).
  */
-export function Character({ id, state, active, selected, onSelect, anchors }) {
+export function Character({ id, state, active, selected, talking, onSelect, anchors }) {
   const look = LOOKS[id];
   const desk = DESKS[id];
   const root = useRef();
@@ -239,7 +62,6 @@ export function Character({ id, state, active, selected, onSelect, anchors }) {
     nextWander: 3 + Math.random() * 8,
     atDesk: true,
   });
-  const [blink, setBlink] = useState(false);
 
   const status = !active ? 'offduty' : state?.status || 'idle';
 
@@ -252,21 +74,13 @@ export function Character({ id, state, active, selected, onSelect, anchors }) {
     }
   }, [status]);
 
-  useEffect(() => {
-    const b = setInterval(() => {
-      setBlink(true);
-      setTimeout(() => setBlink(false), 140);
-    }, 2800 + Math.random() * 2500);
-    return () => clearInterval(b);
-  }, []);
-
   useFrame((three, dt) => {
     dt = Math.min(dt, 0.05);
     const t = three.clock.elapsedTime;
     const s = sim.current;
 
-    // Idle people wander; workers and paused people stay put.
-    if ((status === 'idle' || status === 'offduty') && s.path.length === 0) {
+    // Idle people wander; workers and paused people stay put; anyone you're talking to waits.
+    if (!talking && (status === 'idle' || status === 'offduty') && s.path.length === 0) {
       s.nextWander -= dt;
       if (s.nextWander <= 0) {
         const goHome = !s.atDesk && Math.random() < 0.5;
@@ -278,7 +92,7 @@ export function Character({ id, state, active, selected, onSelect, anchors }) {
     }
 
     let walking = false;
-    if (s.path.length) {
+    if (s.path.length && !talking) {
       const [tx, tz] = s.path[0];
       const dx = tx - s.pos.x;
       const dz = tz - s.pos.y;
@@ -293,61 +107,25 @@ export function Character({ id, state, active, selected, onSelect, anchors }) {
         s.face = Math.atan2(dx, dz);
         walking = true;
       }
+    } else if (talking) {
+      s.face = Math.atan2(game.player.x - s.pos.x, game.player.z - s.pos.y);
     } else if (s.atDesk) {
       s.face = desk.face;
     }
 
+    game.staffPos[id] = { x: s.pos.x, z: s.pos.y };
     const g = root.current;
     g.position.x = s.pos.x;
     g.position.z = s.pos.y;
-    // Smallest-angle turn.
-    let diff = s.face - g.rotation.y;
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    g.rotation.y += diff * Math.min(1, dt * 8);
+    turnToward(g, s.face, dt);
 
-    const typing = status === 'working' && s.atDesk;
-    body.current.position.y = walking ? Math.abs(Math.sin(t * 10)) * 0.06 : typing ? Math.sin(t * 18) * 0.008 : Math.sin(t * 2) * 0.01;
-
-    const [armL, armR] = armsRef.current.children;
-    const [legL, legR] = legsRef.current.children;
-    if (walking) {
-      const swing = Math.sin(t * 10) * 0.6;
-      armL.rotation.x = swing; armR.rotation.x = -swing;
-      legL.rotation.x = -swing; legR.rotation.x = swing;
-    } else if (typing) {
-      armL.rotation.x = -1.1 + Math.sin(t * 22) * 0.12;
-      armR.rotation.x = -1.1 + Math.sin(t * 22 + 1.7) * 0.12;
-      legL.rotation.x = legR.rotation.x = 0;
-    } else {
-      armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, 0, dt * 6);
-      armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, 0, dt * 6);
-      legL.rotation.x = legR.rotation.x = 0;
-    }
+    const mode = walking ? 'walk' : status === 'working' && s.atDesk && !talking ? 'type' : 'still';
+    animateLimbs(t, dt, mode, armsRef, legsRef, body);
   });
 
   return (
-    <group
-      ref={root}
-      position={[desk.pos[0], 0, desk.pos[1]]}
-      onClick={(e) => { e.stopPropagation(); onSelect(id); }}
-    >
-      <group ref={body} scale={1.15}>
-        <Body look={look} armsRef={armsRef} legsRef={legsRef} />
-        <group position={[0, 1.38, 0]}>
-          <mesh castShadow>
-            <sphereGeometry args={[0.45, 32, 24]} />{mat(look.skin)}
-          </mesh>
-          {[-1, 1].map((s) => (
-            <mesh key={s} position={[0.44 * s, -0.02, 0]}>
-              <sphereGeometry args={[0.08, 10, 8]} />{mat(look.skin)}
-            </mesh>
-          ))}
-          <Face look={look} blink={blink} />
-          <Hair look={look} />
-          {look.headphones && <Headphones color={look.headphones} />}
-        </group>
-      </group>
-      {/* selection ring */}
+    <group ref={root} position={[desk.pos[0], 0, desk.pos[1]]} onClick={(e) => { e.stopPropagation(); onSelect(id); }}>
+      <Chibi look={look} bodyRef={body} armsRef={armsRef} legsRef={legsRef} />
       {selected && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
           <ringGeometry args={[0.55, 0.68, 40]} />
@@ -361,6 +139,64 @@ export function Character({ id, state, active, selected, onSelect, anchors }) {
       </mesh>
       {/* where the speech bubble hangs (see Bubbles.jsx) */}
       <group position={[0, 2.55, 0]} ref={(el) => { if (anchors) anchors[id] = el; }} />
+    </group>
+  );
+}
+
+/** You. Walks with the joystick; finds who or what is in reach. */
+export function Player({ anchors }) {
+  const root = useRef();
+  const body = useRef();
+  const armsRef = useRef();
+  const legsRef = useRef();
+  const face = useRef(Math.PI);
+
+  useFrame((three, dt) => {
+    dt = Math.min(dt, 0.05);
+    const p = game.player;
+    let { x: ix, z: iz } = game.input;
+    const len = Math.hypot(ix, iz);
+    if (len > 1) { ix /= len; iz /= len; }
+    const moving = !game.frozen && len > 0.08;
+    if (moving) {
+      [p.x, p.z] = slide(p.x, p.z, ix * PLAYER_SPEED * dt, iz * PLAYER_SPEED * dt);
+      face.current = Math.atan2(ix, iz);
+    }
+
+    // What's in reach: the closest person, else the closest station.
+    let best = null;
+    let bestD = Infinity;
+    for (const [id, sp] of Object.entries(game.staffPos)) {
+      const d = Math.hypot(sp.x - p.x, sp.z - p.z);
+      if (d < TALK_RANGE && d < bestD) { best = { type: 'staff', id }; bestD = d; }
+    }
+    if (!best) {
+      for (const [id, st] of Object.entries(STATIONS)) {
+        const d = Math.hypot(st.pos[0] - p.x, st.pos[1] - p.z);
+        if (d < st.r && d < bestD) { best = { type: 'station', id }; bestD = d; }
+      }
+    }
+    if (!game.frozen) setNear(best);
+    if (game.frozen && game.near?.type === 'staff') {
+      const sp = game.staffPos[game.near.id];
+      if (sp) face.current = Math.atan2(sp.x - p.x, sp.z - p.z);
+    }
+
+    const g = root.current;
+    g.position.x = p.x;
+    g.position.z = p.z;
+    turnToward(g, face.current, dt);
+    animateLimbs(three.clock.elapsedTime, dt, moving ? 'walk' : 'still', armsRef, legsRef, body);
+  });
+
+  return (
+    <group ref={root} position={[game.player.x, 0, game.player.z]}>
+      <Chibi look={LOOKS.you} bodyRef={body} armsRef={armsRef} legsRef={legsRef} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
+        <circleGeometry args={[0.5, 24]} />
+        <meshBasicMaterial color="#ffd23f" transparent opacity={0.35} />
+      </mesh>
+      <group position={[0, 2.55, 0]} ref={(el) => { if (anchors) anchors.you = el; }} />
     </group>
   );
 }

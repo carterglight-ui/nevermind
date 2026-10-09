@@ -52,3 +52,44 @@ export function route(from, to) {
   points.push(to);
   return points;
 }
+
+// Things you can walk up to and use (Among Us style). r = how close you need to be.
+export const STATIONS = {
+  review: { pos: [2.7, 4.3], r: 1.4, label: 'Printer', opens: 'review' },
+  briefing: { pos: [0, -2.45], r: 1.3, label: "Ren's scroll", opens: 'briefings' },
+  log: { pos: [-7.2, 3.6], r: 1.4, label: 'Bulletin board', opens: 'log' },
+  mail: { pos: [7.1, 4.2], r: 1.4, label: 'Mail terminal', opens: 'mail' },
+};
+
+export const PLAYER_START = [0, 5.2];
+const BOUNDS = { minX: -7.4, maxX: 7.4, minZ: -7.1, maxZ: 7.2 };
+
+// Solid rectangles [minX, maxX, minZ, maxZ] the player can't walk through.
+export const OBSTACLES = (() => {
+  const o = [];
+  const t = 0.12;
+  for (const r of Object.values(ROOMS)) {
+    const x0 = r.x - r.w / 2, x1 = r.x + r.w / 2, z0 = r.z - r.d / 2, z1 = r.z + r.d / 2;
+    o.push([x0 - t, x0 + t, z0, z1], [x1 - t, x1 + t, z0, z1], [x0, x1, z0 - t, z0 + t]);
+    o.push([x0, r.x - 0.7, z1 - t, z1 + t], [r.x + 0.7, x1, z1 - t, z1 + t]); // front glass, door gap in the middle
+  }
+  for (const id of ['washington', 'ren', 'cleo']) {
+    const [x, z] = DESKS[id].pos;
+    const w = id === 'ren' ? 2.2 : 1.8;
+    o.push([x - w / 2, x + w / 2, z + 0.45, z + 1.25]);
+  }
+  o.push([-0.9, 0.9, -1.4, 3.0]); // meeting table
+  for (const [x, z] of [[-5.3, 1.3], [-5.3, -1.0], [5.3, 1.3], [5.3, -1.0]]) o.push([x - 0.4, x + 0.4, z - 1.1, z + 1.1]);
+  o.push([-4.7, -2.5, 5.8, 6.4]); // coffee bar
+  return o;
+})();
+
+/** Move a circle of radius r from (x, z) by (dx, dz), sliding along walls. */
+export function slide(x, z, dx, dz, r = 0.32) {
+  const blocked = (px, pz) =>
+    px < BOUNDS.minX || px > BOUNDS.maxX || pz < BOUNDS.minZ || pz > BOUNDS.maxZ ||
+    OBSTACLES.some(([a, b, c, d]) => px > a - r && px < b + r && pz > c - r && pz < d + r);
+  if (!blocked(x + dx, z)) x += dx;
+  if (!blocked(x, z + dz)) z += dz;
+  return [x, z];
+}

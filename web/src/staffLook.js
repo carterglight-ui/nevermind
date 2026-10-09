@@ -1,5 +1,6 @@
 // How each employee looks in the office, matched to the concept art.
 export const LOOKS = {
+  you: { skin: '#f1c6a2', top: '#2f62c8', shirt: '#f5f5f2', pants: '#2a2a2f', hair: 'cap', hairColor: '#3a2416', cap: '#d62b22', eyes: 'round', accent: '#d62b22' },
   washington: { skin: '#f1c6a2', top: '#2c2c30', shirt: '#f5f5f2', pants: '#2c2c30', tie: '#111114', hair: 'slick', hairColor: '#17171a', eyes: 'stern', accent: '#3b3b44' },
   wren: { skin: '#f7e9e1', top: '#151518', shirt: '#151518', pants: '#1c1c20', hair: 'long', hairColor: '#0f0f12', eyes: 'half', accent: '#7a1f2a', prop: 'redBook' },
   milo: { skin: '#f2c8a4', top: '#f7f6f2', shirt: '#f7f6f2', pants: '#2a2a2f', hair: 'messy', hairColor: '#7b4a28', eyes: 'happy', headphones: '#d22a2a', accent: '#d22a2a', prop: 'blueBook' },

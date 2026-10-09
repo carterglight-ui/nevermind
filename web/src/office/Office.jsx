@@ -1,10 +1,10 @@
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { Character } from './Character.jsx';
+import { Character, Player } from './Character.jsx';
 import { BubbleProjector, BubbleLayer } from './Bubbles.jsx';
-import { ROOMS, DESKS } from './layout.js';
+import { ROOMS, DESKS, STATIONS } from './layout.js';
+import { game } from '../game.js';
 
 const GLASS = { color: '#cfe3f5', transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.1, depthWrite: false };
 const FRAME = '#3a3f4a';
@@ -334,24 +334,130 @@ function WindowWall() {
 
 /** Frame the office for whatever shape the screen is (portrait phones need to stand further back). */
 const TARGET = [0, 0, -0.3];
+const tmp = new THREE.Vector3();
+
+/**
+ * Follow camera (like walking around in Pokemon) or the whole-office map view.
+ * The map view frames the floor for whatever shape the screen is.
+ */
 function CameraRig() {
   const { camera, size } = useThree();
-  useMemo(() => {
+  const look = useRef(new THREE.Vector3(game.player.x, 0, game.player.z));
+  useFrame((_, dt) => {
     const aspect = size.width / size.height;
     camera.fov = aspect < 1 ? 50 : 40;
-    const v = THREE.MathUtils.degToRad(camera.fov) / 2;
-    const h = Math.atan(Math.tan(v) * aspect);
-    // Far enough back to fit the floor's width, and its depth (foreshortened) in view.
-    const dist = Math.max(8.2 / Math.tan(h), 7 / Math.tan(v)) * 0.98;
-    const tilt = THREE.MathUtils.degToRad(52);
-    camera.position.set(TARGET[0], dist * Math.sin(tilt), TARGET[2] + dist * Math.cos(tilt));
-    camera.lookAt(...TARGET);
     camera.updateProjectionMatrix();
-  }, [camera, size.width, size.height]);
+    const k = Math.min(1, dt * 4);
+    if (game.map) {
+      const v = THREE.MathUtils.degToRad(camera.fov) / 2;
+      const h = Math.atan(Math.tan(v) * aspect);
+      const dist = Math.max(8.2 / Math.tan(h), 7 / Math.tan(v)) * 0.98;
+      const tilt = THREE.MathUtils.degToRad(52);
+      tmp.set(TARGET[0], dist * Math.sin(tilt), TARGET[2] + dist * Math.cos(tilt));
+      look.current.lerp(tmp.clone().set(...TARGET), k);
+    } else {
+      const dist = aspect < 1 ? 15.5 : 13;
+      const tilt = THREE.MathUtils.degToRad(55);
+      tmp.set(game.player.x, dist * Math.sin(tilt), game.player.z + dist * Math.cos(tilt));
+      look.current.lerp(new THREE.Vector3(game.player.x, 0.6, game.player.z), k * 1.5);
+    }
+    camera.position.lerp(tmp, k);
+    camera.lookAt(look.current);
+  });
   return null;
 }
 
-export function Office({ roster, staff, selected, onSelect }) {
+/** Among Us style task stations. */
+function Stations({ level }) {
+  const [px, pz] = STATIONS.review.pos;
+  const [bx, bz] = STATIONS.briefing.pos;
+  const [lx, lz] = STATIONS.log.pos;
+  const [mx, mz] = STATIONS.mail.pos;
+  return (
+    <group>
+      {/* printer: drafts come out here */}
+      <group position={[px, 0, pz]}>
+        <mesh position={[0, 0.4, 0]} castShadow><boxGeometry args={[0.7, 0.8, 0.5]} /><meshStandardMaterial color="#e9e9ec" /></mesh>
+        <mesh position={[0, 0.88, 0]} castShadow><boxGeometry args={[0.6, 0.16, 0.45]} /><meshStandardMaterial color="#3a3e47" /></mesh>
+        <mesh position={[0, 0.82, 0.3]} rotation={[-0.4, 0, 0]}><planeGeometry args={[0.4, 0.3]} /><meshStandardMaterial color="#ffffff" /></mesh>
+      </group>
+      {/* Ren's briefing scroll on a stand */}
+      <group position={[bx, 0, bz]}>
+        <mesh position={[0, 0.5, 0]} castShadow><cylinderGeometry args={[0.06, 0.12, 1, 10]} /><meshStandardMaterial color="#5a3b22" /></mesh>
+        <mesh position={[0, 1.02, 0]} rotation={[0, 0, Math.PI / 2]} castShadow><cylinderGeometry args={[0.09, 0.09, 0.6, 12]} /><meshStandardMaterial color="#f3e2b8" /></mesh>
+        <mesh position={[0, 1.02, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.1, 0.1, 0.05, 12]} /><meshStandardMaterial color="#c98b2e" /></mesh>
+      </group>
+      {/* bulletin board */}
+      <group position={[lx - 0.25, 0, lz]} rotation={[0, Math.PI / 2, 0]}>
+        <mesh position={[0, 1.3, 0]} castShadow><boxGeometry args={[1.6, 1.0, 0.06]} /><meshStandardMaterial color="#b9895a" /></mesh>
+        {[[-0.45, 1.45, '#fff6a8'], [0.1, 1.5, '#ffffff'], [0.5, 1.25, '#bfe3ff'], [-0.2, 1.1, '#ffd1dc']].map(([x, y, c], i) => (
+          <mesh key={i} position={[x, y, 0.04]} rotation={[0, 0, (i - 1.5) * 0.08]}><planeGeometry args={[0.32, 0.3]} /><meshStandardMaterial color={c} /></mesh>
+        ))}
+        {[-0.7, 0.7].map((x) => <mesh key={x} position={[x, 0.4, 0]}><boxGeometry args={[0.05, 0.8, 0.05]} /><meshStandardMaterial color="#3a3e47" /></mesh>)}
+      </group>
+      {/* mail terminal */}
+      <group position={[mx, 0, mz]} rotation={[0, -Math.PI / 2, 0]}>
+        <mesh position={[0, 0.55, 0]} castShadow><boxGeometry args={[0.6, 1.1, 0.4]} /><meshStandardMaterial color="#2a2f38" /></mesh>
+        <mesh position={[0, 0.95, 0.205]}><planeGeometry args={[0.46, 0.3]} /><meshStandardMaterial color="#7fd3a0" emissive="#3fa36b" emissiveIntensity={0.6} /></mesh>
+      </group>
+      <Decor level={level} />
+    </group>
+  );
+}
+
+function Plant({ position, s = 1 }) {
+  return (
+    <group position={position} scale={s}>
+      <mesh position={[0, 0.25, 0]} castShadow><cylinderGeometry args={[0.22, 0.17, 0.5, 12]} /><meshStandardMaterial color="#f1ede4" /></mesh>
+      <mesh position={[0, 0.75, 0]} castShadow><sphereGeometry args={[0.38, 12, 10]} /><meshStandardMaterial color="#3d7a46" /></mesh>
+      <mesh position={[0.15, 1.0, 0.05]} castShadow><sphereGeometry args={[0.25, 10, 8]} /><meshStandardMaterial color="#4b8f52" /></mesh>
+    </group>
+  );
+}
+
+/** The office improves as the company levels up from real, finished work. */
+export const UNLOCKS = [
+  { level: 2, name: 'Plants' },
+  { level: 3, name: 'Gallery wall' },
+  { level: 4, name: 'Arcade cabinet' },
+  { level: 5, name: 'Trophy and neon sign' },
+];
+
+function Decor({ level }) {
+  return (
+    <group>
+      {level >= 2 && (
+        <>
+          <Plant position={[-7.0, 0, 6.8]} />
+          <Plant position={[7.0, 0, 6.8]} />
+          <Plant position={[-7.0, 0, -2.7]} s={0.8} />
+          <Plant position={[7.0, 0, -2.7]} s={0.8} />
+        </>
+      )}
+      {level >= 3 &&
+        [[-4.75, '#d62b22'], [4.75, '#2f62c8']].map(([x, c]) => (
+          <group key={x} position={[x, 1.7, -7.12]}>
+            <mesh><boxGeometry args={[1.2, 0.8, 0.04]} /><meshStandardMaterial color="#111" /></mesh>
+            <mesh position={[0, 0, 0.025]}><planeGeometry args={[1.05, 0.65]} /><meshStandardMaterial color={c} /></mesh>
+          </group>
+        ))}
+      {level >= 4 && (
+        <group position={[-1.4, 0, 6.3]}>
+          <mesh position={[0, 0.85, 0]} castShadow><boxGeometry args={[0.8, 1.7, 0.7]} /><meshStandardMaterial color="#5b2a86" /></mesh>
+          <mesh position={[0, 1.2, 0.36]}><planeGeometry args={[0.6, 0.45]} /><meshStandardMaterial color="#2affc6" emissive="#16b08a" emissiveIntensity={0.8} /></mesh>
+        </group>
+      )}
+      {level >= 5 && (
+        <group position={[-0.7, 0.81, -5.25]}>
+          <mesh position={[0, 0.15, 0]}><cylinderGeometry args={[0.1, 0.14, 0.3, 12]} /><meshStandardMaterial color="#e2b53c" metalness={0.8} roughness={0.25} /></mesh>
+          <mesh position={[0, 0.38, 0]}><sphereGeometry args={[0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} /><meshStandardMaterial color="#e2b53c" metalness={0.8} roughness={0.25} side={THREE.DoubleSide} /></mesh>
+        </group>
+      )}
+    </group>
+  );
+}
+
+export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1, stationBadges = {} }) {
   const stateById = Object.fromEntries(staff.map((s) => [s.id, s]));
   // Shared between the 3D scene (head positions) and the HTML bubble layer.
   const anchors = useMemo(() => ({}), []);
@@ -363,6 +469,7 @@ export function Office({ roster, staff, selected, onSelect }) {
       dpr={[1, 2]}
       camera={{ fov: 40, near: 0.5, far: 200, position: [0, 14, 16] }}
       onPointerMissed={() => onSelect(null)}
+      onCreated={({ gl }) => gl.setClearColor('#bcd0ee')}
       style={{ position: 'absolute', inset: 0 }}
     >
       <color attach="background" args={['#bcd0ee']} />
@@ -401,22 +508,16 @@ export function Office({ roster, staff, selected, onSelect }) {
       <Floor />
       <Furniture />
       {roster.map((p) => (
-        <Character key={p.id} id={p.id} active={p.active} state={stateById[p.id]} selected={selected === p.id} onSelect={onSelect} anchors={anchors} />
+        <Character key={p.id} id={p.id} active={p.active} state={stateById[p.id]} selected={selected === p.id} talking={talkingTo === p.id} onSelect={onSelect} anchors={anchors} />
+      ))}
+      <Player anchors={anchors} />
+      <Stations level={level} />
+      {Object.entries(STATIONS).map(([id, st]) => (
+        <group key={id} position={[st.pos[0], 1.9, st.pos[1]]} ref={(el) => { anchors[`st:${id}`] = el; }} />
       ))}
       <BubbleProjector anchors={anchors} elements={elements} />
-      <OrbitControls
-        target={TARGET}
-        enableRotate
-        minPolarAngle={0.35}
-        maxPolarAngle={1.15}
-        minAzimuthAngle={-0.6}
-        maxAzimuthAngle={0.6}
-        minDistance={6}
-        maxDistance={60}
-        enableDamping
-      />
     </Canvas>
-    <BubbleLayer roster={roster} staff={staff} elements={elements} />
+    <BubbleLayer roster={roster} staff={staff} elements={elements} stationBadges={stationBadges} />
     </>
   );
 }
