@@ -1,10 +1,10 @@
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { MeshReflectorMaterial, Environment, Lightformer } from '@react-three/drei';
+import { MeshReflectorMaterial, Environment, Lightformer, MapControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { Character, Player } from './Character.jsx';
+import { Character } from './Character.jsx';
 import { BubbleProjector, BubbleLayer } from './Bubbles.jsx';
-import { ROOMS, DESKS, STATIONS } from './layout.js';
+import { ROOMS, DESKS, STATIONS, clampToFloor } from './layout.js';
 import { game } from '../game.js';
 
 const GLASS = { color: '#d6e8f7', transparent: true, opacity: 0.16, roughness: 0.02, metalness: 0.3, envMapIntensity: 1.5, depthWrite: false };
@@ -431,37 +431,60 @@ function WindowWall() {
 
 /** Frame the office for whatever shape the screen is (portrait phones need to stand further back). */
 const TARGET = [0, 0, -0.3];
-const tmp = new THREE.Vector3();
 
 /**
- * Follow camera (like walking around in Pokemon) or the whole-office map view.
- * The map view frames the floor for whatever shape the screen is.
+ * You watch from above, like a god over a model office. Drag to look around,
+ * pinch to zoom. The first view frames the whole floor for the screen's shape.
  */
-function CameraRig() {
+function Observer() {
   const { camera, size } = useThree();
-  const look = useRef(new THREE.Vector3(game.player.x, 0, game.player.z));
-  useFrame((_, dt) => {
+  const controls = useRef();
+  useMemo(() => {
     const aspect = size.width / size.height;
     camera.fov = aspect < 1 ? 50 : 40;
+    const v = THREE.MathUtils.degToRad(camera.fov) / 2;
+    const h = Math.atan(Math.tan(v) * aspect);
+    const dist = Math.max(8.2 / Math.tan(h), 7 / Math.tan(v)) * 0.98;
+    const tilt = THREE.MathUtils.degToRad(52);
+    camera.position.set(TARGET[0], dist * Math.sin(tilt), TARGET[2] + dist * Math.cos(tilt));
+    camera.lookAt(...TARGET);
     camera.updateProjectionMatrix();
-    const k = Math.min(1, dt * 4);
-    if (game.map) {
-      const v = THREE.MathUtils.degToRad(camera.fov) / 2;
-      const h = Math.atan(Math.tan(v) * aspect);
-      const dist = Math.max(8.2 / Math.tan(h), 7 / Math.tan(v)) * 0.98;
-      const tilt = THREE.MathUtils.degToRad(52);
-      tmp.set(TARGET[0], dist * Math.sin(tilt), TARGET[2] + dist * Math.cos(tilt));
-      look.current.lerp(tmp.clone().set(...TARGET), k);
-    } else {
-      const dist = aspect < 1 ? 15.5 : 13;
-      const tilt = THREE.MathUtils.degToRad(55);
-      tmp.set(game.player.x, dist * Math.sin(tilt), game.player.z + dist * Math.cos(tilt));
-      look.current.lerp(new THREE.Vector3(game.player.x, 0.6, game.player.z), k * 1.5);
-    }
-    camera.position.lerp(tmp, k);
-    camera.lookAt(look.current);
-  });
-  return null;
+    controls.current?.target.set(...TARGET);
+  }, [camera, size.width, size.height]);
+  return (
+    <MapControls
+      ref={controls}
+      target={TARGET}
+      enableRotate
+      enableDamping
+      dampingFactor={0.12}
+      screenSpacePanning={false}
+      minDistance={7}
+      maxDistance={45}
+      minPolarAngle={0.3}
+      maxPolarAngle={1.15}
+      minAzimuthAngle={-0.7}
+      maxAzimuthAngle={0.7}
+      onChange={() => {
+        // keep the view over the office
+        const t = controls.current?.target;
+        if (!t) return;
+        t.x = THREE.MathUtils.clamp(t.x, -7, 7);
+        t.z = THREE.MathUtils.clamp(t.z, -7, 7);
+        t.y = 0;
+      }}
+    />
+  );
+}
+
+/** Invisible floor that catches taps when you're sending someone somewhere. */
+function FloorTarget({ onFloor }) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} onClick={(e) => { if (game.moveMode) { e.stopPropagation(); onFloor(clampToFloor([e.point.x, e.point.z])); } }}>
+      <planeGeometry args={[15.5, 16]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+  );
 }
 
 /** Among Us style task stations. */
@@ -564,7 +587,7 @@ function Decor({ level }) {
   );
 }
 
-export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1, stationBadges = {}, quality = 'high' }) {
+export function Office({ roster, staff, onSelect, onFloor, onStation, level = 1, stationBadges = {}, quality = 'high' }) {
   const hq = quality === 'high';
   const stateById = Object.fromEntries(staff.map((s) => [s.id, s]));
   // Shared between the 3D scene (head positions) and the HTML bubble layer.
@@ -577,13 +600,12 @@ export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1
       dpr={hq ? [1, 2] : [1, 1.25]}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.88 }}
       camera={{ fov: 40, near: 0.5, far: 200, position: [0, 14, 16] }}
-      onPointerMissed={() => onSelect(null)}
       onCreated={({ gl }) => gl.setClearColor('#bcd0ee')}
       style={{ position: 'absolute', inset: 0 }}
     >
       <color attach="background" args={['#bcd0ee']} />
       <fog attach="fog" args={['#d6d6e8', 34, 95]} />
-      <CameraRig />
+      <Observer />
       <SkyDome />
       <Sun />
       {/* Studio-style reflections for the glossy figures and glass, built locally (no downloads). */}
@@ -625,16 +647,16 @@ export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1
       <Floor hq={hq} />
       <Furniture />
       {roster.map((p) => (
-        <Character key={p.id} id={p.id} active={p.active} state={stateById[p.id]} selected={selected === p.id} talking={talkingTo === p.id} onSelect={onSelect} anchors={anchors} />
+        <Character key={p.id} id={p.id} active={p.active} state={stateById[p.id]} onSelect={onSelect} anchors={anchors} />
       ))}
-      <Player anchors={anchors} />
+      <FloorTarget onFloor={onFloor} />
       <Stations level={level} />
       {Object.entries(STATIONS).map(([id, st]) => (
         <group key={id} position={[st.pos[0], 1.9, st.pos[1]]} ref={(el) => { anchors[`st:${id}`] = el; }} />
       ))}
       <BubbleProjector anchors={anchors} elements={elements} />
     </Canvas>
-    <BubbleLayer roster={roster} staff={staff} elements={elements} stationBadges={stationBadges} />
+    <BubbleLayer roster={roster} staff={staff} elements={elements} stationBadges={stationBadges} onStation={onStation} />
     </>
   );
 }

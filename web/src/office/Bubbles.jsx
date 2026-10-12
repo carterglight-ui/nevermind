@@ -48,20 +48,23 @@ function Typewriter({ text }) {
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-/** Who or what the player can reach right now. */
-export function useNear() {
-  const [near, setNear] = useState(game.near);
+/** Re-render a few times a second to follow the simulation (meetings, hand-offs). */
+function useSimTick(ms = 400) {
+  const [, setN] = useState(0);
   useEffect(() => {
-    game.listeners.add(setNear);
-    return () => game.listeners.delete(setNear);
-  }, []);
-  return near;
+    const bump = () => setN((n) => n + 1);
+    const id = setInterval(bump, ms);
+    game.listeners.add(bump);
+    return () => { clearInterval(id); game.listeners.delete(bump); };
+  }, [ms]);
 }
 
-const Pointer = () => <div className="pointer">▼</div>;
-
-/** One employee's bubble: what they just said, else what they're doing, else rare idle chatter. */
-function Bubble({ id, state, active, elements, isNear }) {
+/**
+ * One employee's bubble. In order: what they're saying in a team huddle,
+ * what they're telling a teammate while handing off work, what they just said,
+ * what they're working on, else rare idle chatter.
+ */
+function Bubble({ id, state, active, elements }) {
   const [said, setSaid] = useState('');
   const [idleLine, setIdleLine] = useState('');
   const status = !active ? 'offduty' : state?.status || 'idle';
@@ -85,17 +88,26 @@ function Bubble({ id, state, active, elements, isNear }) {
     return () => { clearInterval(c); clearTimeout(clear); };
   }, [status, id]);
 
+  const meeting = game.meeting;
+  const meetingLine = meeting?.speaking === id ? meeting.line : '';
+  const visit = game.visits[id];
+  const inMeeting = Boolean(meeting?.participants.includes(id));
+  const visitLine = !inMeeting && visit && visit.until > Date.now() ? visit.line : '';
+  const listening = game.talkingTo === id;
+
   const text =
+    meetingLine ||
+    (listening ? '…' : '') ||
+    visitLine ||
     said ||
     (status === 'working' && state?.activity ? `${state.activity}…` : '') ||
     (status === 'paused' ? 'Paused.' : '') ||
-    idleLine;
+    (meeting?.participants.includes(id) ? '' : idleLine);
 
   return (
     <div className="bubble-anchor" ref={(el) => { elements[id] = el; }}>
-      {isNear && !text && <Pointer />}
       {text && (
-        <div className={`bubble ${!said && status !== 'working' ? 'muted' : ''}`}>
+        <div className={`bubble ${meetingLine || visitLine || said ? '' : 'muted'}`}>
           <Typewriter key={text} text={text} />
         </div>
       )}
@@ -103,26 +115,23 @@ function Bubble({ id, state, active, elements, isNear }) {
   );
 }
 
-/** Lives outside <Canvas>, over it. */
-export function BubbleLayer({ roster, staff, elements, stationBadges }) {
+/** Lives outside <Canvas>, over it. Station labels are buttons. */
+export function BubbleLayer({ roster, staff, elements, stationBadges, onStation }) {
+  useSimTick();
   const byId = Object.fromEntries(staff.map((s) => [s.id, s]));
-  const near = useNear();
   return (
     <div className="bubble-layer">
       {roster.map((p) => (
-        <Bubble key={p.id} id={p.id} active={p.active} state={byId[p.id]} elements={elements} isNear={near?.type === 'staff' && near.id === p.id} />
+        <Bubble key={p.id} id={p.id} active={p.active} state={byId[p.id]} elements={elements} />
       ))}
       {Object.entries(STATIONS).map(([id, st]) => (
         <div key={id} className="bubble-anchor" ref={(el) => { elements[`st:${id}`] = el; }}>
-          <div className={`station-tag ${stationBadges[id] ? 'alert' : ''} ${near?.type === 'station' && near.id === id ? 'near' : ''}`}>
+          <button className={`station-tag ${stationBadges[id] ? 'alert' : ''}`} onClick={() => onStation(st.opens)}>
             {stationBadges[id] ? <span className="excl">!</span> : null}
             {st.label}
-          </div>
+          </button>
         </div>
       ))}
-      <div className="bubble-anchor" ref={(el) => { elements.you = el; }}>
-        <div className="you-tag">YOU</div>
-      </div>
     </div>
   );
 }

@@ -1,41 +1,45 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LOOKS } from '../staffLook.js';
-import { DESKS, HANGOUTS, STATIONS, route, slide } from './layout.js';
+import { DESKS, HANGOUTS, MEETING_SEATS, route } from './layout.js';
 import { Chibi } from './models.jsx';
-import { game, setNear } from '../game.js';
+import { game } from '../game.js';
 
 const WALK_SPEED = 1.5;
-const PLAYER_SPEED = 3.2;
-const TALK_RANGE = 2.4;
-
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 function animateLimbs(t, dt, mode, armsRef, legsRef, bodyRef) {
   const [armL, armR] = armsRef.current.children;
   const [legL, legR] = legsRef.current.children;
   bodyRef.current.position.y = mode === 'walk' ? Math.abs(Math.sin(t * 10)) * 0.06 : mode === 'type' ? Math.sin(t * 18) * 0.008 : Math.sin(t * 2) * 0.01;
+  const ease = (v, to, k = 6) => THREE.MathUtils.lerp(v, to, Math.min(1, dt * k));
   if (mode === 'walk') {
     const swing = Math.sin(t * 10) * 0.6;
     armL.rotation.x = swing; armR.rotation.x = -swing;
     legL.rotation.x = -swing; legR.rotation.x = swing;
-  } else if (mode === 'type') {
+    armR.rotation.z = ease(armR.rotation.z, 0, 8);
+    return;
+  }
+  legL.rotation.x = legR.rotation.x = 0;
+  if (mode === 'type') {
     armL.rotation.x = -1.1 + Math.sin(t * 22) * 0.12;
     armR.rotation.x = -1.1 + Math.sin(t * 22 + 1.7) * 0.12;
-    legL.rotation.x = legR.rotation.x = 0;
+    armR.rotation.z = ease(armR.rotation.z, 0, 8);
   } else if (mode === 'wave') {
-    armR.rotation.x = 0;
+    armL.rotation.x = ease(armL.rotation.x, 0);
+    armR.rotation.x = ease(armR.rotation.x, 0);
     armR.rotation.z = -2.6 + Math.sin(t * 8) * 0.3;
-    armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, 0, dt * 6);
-    legL.rotation.x = legR.rotation.x = 0;
-    return;
+  } else if (mode === 'talk') {
+    // gesturing while making a point
+    armL.rotation.x = ease(armL.rotation.x, -0.5 + Math.sin(t * 5) * 0.25);
+    armR.rotation.x = ease(armR.rotation.x, -0.7 + Math.sin(t * 6 + 1) * 0.3);
+    armR.rotation.z = ease(armR.rotation.z, 0, 8);
   } else {
-    armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, 0, dt * 6);
-    armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, 0, dt * 6);
-    legL.rotation.x = legR.rotation.x = 0;
+    armL.rotation.x = ease(armL.rotation.x, 0);
+    armR.rotation.x = ease(armR.rotation.x, 0);
+    armR.rotation.z = ease(armR.rotation.z, 0, 8);
   }
-  armR.rotation.z = THREE.MathUtils.lerp(armR.rotation.z, 0, dt * 8);
 }
 
 function turnToward(group, face, dt) {
@@ -45,10 +49,12 @@ function turnToward(group, face, dt) {
 }
 
 /**
- * One employee. `state` comes from the server: status (idle | working | paused),
- * activity (what they're doing) and bubble (what they last said).
+ * One employee, living their workday. What they do, in order of priority:
+ * stop when you talk to them, go to a team huddle, go where you sent them,
+ * walk over to hand someone work, sit at their desk while working or paused,
+ * otherwise wander.
  */
-export function Character({ id, state, active, selected, talking, onSelect, anchors }) {
+export function Character({ id, state, active, onSelect, anchors }) {
   const look = LOOKS[id];
   const desk = DESKS[id];
   const root = useRef();
@@ -58,59 +64,89 @@ export function Character({ id, state, active, selected, talking, onSelect, anch
   const sim = useRef({
     pos: new THREE.Vector2(desk.pos[0], desk.pos[1]),
     path: [],
+    goal: null,
     face: desk.face,
     nextWander: 3 + Math.random() * 8,
-    atDesk: true,
+    wanderTo: null,
   });
 
   const status = !active ? 'offduty' : state?.status || 'idle';
 
-  // Working or paused: head to the desk and stay there.
-  useEffect(() => {
-    const s = sim.current;
-    if (status === 'working' || status === 'paused') {
-      s.path = route([s.pos.x, s.pos.y], desk.pos);
-      s.atDesk = false;
-    }
-  }, [status]);
-
   useFrame((three, dt) => {
     dt = Math.min(dt, 0.05);
     const t = three.clock.elapsedTime;
+    const now = Date.now();
     const s = sim.current;
 
-    // Idle people wander; workers and paused people stay put; anyone you're talking to waits.
-    if (!talking && (status === 'idle' || status === 'offduty') && s.path.length === 0) {
+    // 1. What should I be doing right now?
+    let goal = null;
+    let goalFace = null;
+    let pose = 'still';
+    const meeting = game.meeting;
+    const seat = meeting ? meeting.participants.indexOf(id) : -1;
+    const order = game.orders[id];
+    const visit = game.visits[id];
+    if (order && order.until < now) delete game.orders[id];
+    if (visit && visit.until < now) delete game.visits[id];
+
+    if (game.talkingTo === id) {
+      goal = null; // stop where you are
+      goalFace = 0; // turn to you (toward the camera)
+      pose = 'wave';
+    } else if (seat >= 0) {
+      const sp = MEETING_SEATS[seat % MEETING_SEATS.length];
+      goal = sp.pos;
+      goalFace = sp.face;
+      pose = meeting.speaking === id ? 'talk' : 'still';
+    } else if (game.orders[id]) {
+      goal = game.orders[id].to;
+    } else if (game.visits[id] && game.staffPos[game.visits[id].to]) {
+      const other = game.staffPos[game.visits[id].to];
+      const dx = s.pos.x - other.x;
+      const dz = s.pos.y - other.z;
+      const d = Math.hypot(dx, dz) || 1;
+      goal = [other.x + (dx / d) * 1.0, other.z + (dz / d) * 1.0];
+      goalFace = Math.atan2(other.x - goal[0], other.z - goal[1]);
+      pose = 'talk';
+    } else if (status === 'working' || status === 'paused') {
+      goal = desk.pos;
+      goalFace = desk.face;
+      pose = status === 'working' ? 'type' : 'still';
+    } else {
+      // idle: wander between the coffee bar, the windows and their desk
       s.nextWander -= dt;
       if (s.nextWander <= 0) {
-        const goHome = !s.atDesk && Math.random() < 0.5;
-        const target = goHome ? desk.pos : pick(HANGOUTS).map((v) => v + (Math.random() - 0.5) * 0.8);
-        s.path = route([s.pos.x, s.pos.y], target);
-        s.atDesk = false;
+        s.wanderTo = Math.random() < 0.4 ? null : pick(HANGOUTS).map((v) => v + (Math.random() - 0.5) * 0.8);
         s.nextWander = (status === 'offduty' ? 14 : 8) + Math.random() * 14;
       }
+      goal = s.wanderTo || desk.pos;
+      goalFace = s.wanderTo ? null : desk.face;
     }
 
+    // 2. Re-plan the walk when the goal moves.
+    if (goal && (!s.goal || Math.hypot(goal[0] - s.goal[0], goal[1] - s.goal[1]) > 0.3)) {
+      s.goal = goal;
+      s.path = route([s.pos.x, s.pos.y], goal);
+    }
+    if (!goal) { s.goal = null; s.path = []; }
+
+    // 3. Walk.
     let walking = false;
-    if (s.path.length && !talking) {
+    if (s.path.length) {
       const [tx, tz] = s.path[0];
       const dx = tx - s.pos.x;
       const dz = tz - s.pos.y;
       const dist = Math.hypot(dx, dz);
-      if (dist < 0.05) {
-        s.path.shift();
-        if (!s.path.length && Math.hypot(s.pos.x - desk.pos[0], s.pos.y - desk.pos[1]) < 0.1) s.atDesk = true;
-      } else {
+      if (dist < 0.05) s.path.shift();
+      else {
         const step = Math.min(dist, WALK_SPEED * dt);
         s.pos.x += (dx / dist) * step;
         s.pos.y += (dz / dist) * step;
         s.face = Math.atan2(dx, dz);
         walking = true;
       }
-    } else if (talking) {
-      s.face = Math.atan2(game.player.x - s.pos.x, game.player.z - s.pos.y);
-    } else if (s.atDesk) {
-      s.face = desk.face;
+    } else if (goalFace !== null) {
+      s.face = goalFace;
     }
 
     game.staffPos[id] = { x: s.pos.x, z: s.pos.y };
@@ -118,85 +154,19 @@ export function Character({ id, state, active, selected, talking, onSelect, anch
     g.position.x = s.pos.x;
     g.position.z = s.pos.y;
     turnToward(g, s.face, dt);
-
-    const mode = walking ? 'walk' : status === 'working' && s.atDesk && !talking ? 'type' : 'still';
-    animateLimbs(t, dt, mode, armsRef, legsRef, body);
+    animateLimbs(t, dt, walking ? 'walk' : pose, armsRef, legsRef, body);
   });
 
   return (
     <group ref={root} position={[desk.pos[0], 0, desk.pos[1]]} onClick={(e) => { e.stopPropagation(); onSelect(id); }}>
       <Chibi look={look} bodyRef={body} armsRef={armsRef} legsRef={legsRef} />
-      {selected && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-          <ringGeometry args={[0.55, 0.68, 40]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.9} />
-        </mesh>
-      )}
       {/* generous invisible tap target */}
       <mesh position={[0, 1, 0]}>
-        <cylinderGeometry args={[0.7, 0.7, 2.2, 8]} />
+        <cylinderGeometry args={[0.75, 0.75, 2.4, 8]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       {/* where the speech bubble hangs (see Bubbles.jsx) */}
       <group position={[0, 2.55, 0]} ref={(el) => { if (anchors) anchors[id] = el; }} />
-    </group>
-  );
-}
-
-/** You. Walks with the joystick; finds who or what is in reach. */
-export function Player({ anchors }) {
-  const root = useRef();
-  const body = useRef();
-  const armsRef = useRef();
-  const legsRef = useRef();
-  const face = useRef(Math.PI);
-
-  useFrame((three, dt) => {
-    dt = Math.min(dt, 0.05);
-    const p = game.player;
-    let { x: ix, z: iz } = game.input;
-    const len = Math.hypot(ix, iz);
-    if (len > 1) { ix /= len; iz /= len; }
-    const moving = !game.frozen && len > 0.08;
-    if (moving) {
-      [p.x, p.z] = slide(p.x, p.z, ix * PLAYER_SPEED * dt, iz * PLAYER_SPEED * dt);
-      face.current = Math.atan2(ix, iz);
-    }
-
-    // What's in reach: the closest person, else the closest station.
-    let best = null;
-    let bestD = Infinity;
-    for (const [id, sp] of Object.entries(game.staffPos)) {
-      const d = Math.hypot(sp.x - p.x, sp.z - p.z);
-      if (d < TALK_RANGE && d < bestD) { best = { type: 'staff', id }; bestD = d; }
-    }
-    if (!best) {
-      for (const [id, st] of Object.entries(STATIONS)) {
-        const d = Math.hypot(st.pos[0] - p.x, st.pos[1] - p.z);
-        if (d < st.r && d < bestD) { best = { type: 'station', id }; bestD = d; }
-      }
-    }
-    if (!game.frozen) setNear(best);
-    if (game.frozen && game.near?.type === 'staff') {
-      const sp = game.staffPos[game.near.id];
-      if (sp) face.current = Math.atan2(sp.x - p.x, sp.z - p.z);
-    }
-
-    const g = root.current;
-    g.position.x = p.x;
-    g.position.z = p.z;
-    turnToward(g, face.current, dt);
-    animateLimbs(three.clock.elapsedTime, dt, moving ? 'walk' : 'still', armsRef, legsRef, body);
-  });
-
-  return (
-    <group ref={root} position={[game.player.x, 0, game.player.z]}>
-      <Chibi look={LOOKS.you} bodyRef={body} armsRef={armsRef} legsRef={legsRef} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
-        <circleGeometry args={[0.5, 24]} />
-        <meshBasicMaterial color="#ffd23f" transparent opacity={0.35} />
-      </mesh>
-      <group position={[0, 2.55, 0]} ref={(el) => { if (anchors) anchors.you = el; }} />
     </group>
   );
 }

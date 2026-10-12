@@ -558,6 +558,49 @@ Company notes:\n${notesText()}`;
     return l;
   }
 
+  if (route === '/huddle') {
+    const sample = await getSample();
+    if (!sample) throw new Error('Open this link in claude.ai or the Claude app for a team huddle.');
+    const cast = ACTIVE.map((id) => `- ${id}: ${byId[id].name}, ${byId[id].title}. Voice: ${JOBS[id].voice}`).join('\n');
+    setStaff('ren', { bubble: 'Huddle, everyone. Table, please.' });
+    let plan;
+    try {
+      plan = await sample.json(`You run Nevermind's team huddles. Nevermind is a small company whose only client is its owner (a marketing and ads pro for car dealerships, dentist offices and small businesses, with money and creative goals and a family).
+
+Hold a short, useful huddle about the most valuable topic for the owner right now.
+At the table:\n${cast}
+
+What the team knows:
+Notes:\n${notesText()}
+Open tasks: ${db.tasks.filter((t) => ['queued', 'working'].includes(t.status)).map((t) => t.title).join('; ') || 'none'}
+Leads: ${db.leads.map((l) => l.business).join('; ') || 'none'}
+Owner's list: ${db.todos.filter((t) => t.status === 'open').map((t) => t.text).join('; ') || 'none'}
+
+8 to 12 lines of natural back-and-forth, each under 140 characters, everyone in their own voice, ending with Ren deciding. Then the concrete ideas. Don't invent facts or numbers about the owner.
+Reply with ONLY: {"topic": "...", "lines": [{"speaker": "${ACTIVE.join('|')}", "text": "..."}], "ideas": [{"title": "...", "why": "...", "owner": "${ACTIVE.join('|')}", "do_now": true, "details": "..."}]}
+do_now true only for work the team can safely do without the owner (drafting, research, planning).`, { cache: false });
+    } catch (e) {
+      throw new Error(ERRORS[e?.code] || 'The huddle fell apart. Try again in a bit.');
+    }
+    const lines = (plan?.lines || []).filter((l) => ACTIVE.includes(l?.speaker) && l?.text).map((l) => ({ speaker: l.speaker, text: String(l.text).slice(0, 180) }));
+    const topic = String(plan?.topic || 'Team huddle');
+    const later = [];
+    for (const idea of (plan?.ideas || []).filter((i) => i?.title).slice(0, 6)) {
+      const owner = ACTIVE.includes(idea.owner) ? idea.owner : 'ren';
+      if (idea.do_now) {
+        const t = addTask({ title: String(idea.title).slice(0, 200), details: `From the huddle "${topic}". ${idea.why || ''}\n\n${idea.details || ''}`, assignee: owner, created_by: 'ren', priority: 3 });
+        work(t.id);
+      } else later.push(idea);
+    }
+    if (later.length) {
+      const r = { id: db.seq.review++, task_id: null, staff_id: 'ren', kind: 'idea', title: `Huddle ideas: ${topic}`, to_addr: '', subject: '', body: later.map((i) => `${i.title}\n${i.why || ''}\nNext step: ${i.details || ''}`).join('\n\n'), why: `The team brainstormed "${topic}". These need your call.`, status: 'pending', feedback: '', created_at: now(), decided_at: null };
+      db.reviews.unshift(r);
+      emit('review', r);
+    }
+    log('ren', `Team huddle "${topic}": ${(plan?.ideas || []).length} ideas`, 'meeting');
+    return { participants: ACTIVE, topic, lines };
+  }
+
   if (route === '/activity') return db.activity.slice(0, Number(q.get('limit')) || 150);
   if (route === '/clients') return db.clients;
   if (route === '/notes') {

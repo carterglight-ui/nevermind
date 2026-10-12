@@ -8,12 +8,14 @@ Nevermind is a personal AI company you watch and direct from your iPhone. Seven 
 
 ## How it plays
 
-It plays like a handheld RPG (old Pokémon, a bit of Among Us):
+It's an office simulation you watch, styled like an old handheld RPG. You aren't a character in it: you're the client, looking in from above.
 
-- **Walk** with the thumbstick (bottom left). Walk up to someone and press **A** to talk. You get a dialogue box with a menu: TALK, NEW TASK, THEIR WORK, PAUSE/RESUME, STOP TASK.
-- **Stations:** the **Printer** is where drafts come out for your review, **Ren's scroll** holds briefings, the **Bulletin board** is the activity log, and the **Mail terminal** shows what the team can see of your accounts. A "!" means something is waiting.
-- **START** opens the menu (TEAM, REVIEW, BRIEFINGS, LOG, MAIL, OPTIONS). **MAP** zooms out to the whole floor.
-- **XP only comes from real results:** +20 for a finished task, +50 when you approve their work, +10 per briefing. As the company levels up, the office gets upgrades (plants, gallery wall, arcade cabinet, trophy).
+- **Watch.** The team works on their own: at their desks when they're on a task, walking over to hand each other work, gathering at the table for a daily huddle where their real brainstorm plays out in speech bubbles, and wandering when they're free. Drag to look around, pinch to zoom.
+- **Talk to Ren.** The big button. Ask him anything, hand him your to-do list, call a team huddle, read his briefings. He tells the others.
+- **Tap anyone** and they stop and turn to you: ASK, NEW TASK, MOVE (then tap where they should go), THEIR WORK, PAUSE/RESUME, STOP TASK.
+- **Tap a station label:** the **Printer** (drafts waiting for you), **Ren's scroll** (briefings), **Bulletin board** (everything that happened), **Lead board** (Wren's prospects), **Mail terminal** (what the team can see of your accounts). A "!" means something is waiting.
+- **Briefings** list what each employee did, person by person, every morning and evening.
+- **XP only comes from real results:** finished tasks, work you approve, leads that turn into meetings and wins, briefings, and items you cross off your own list. As the company levels up, the office gets upgrades.
 
 There are two builds of the same game:
 

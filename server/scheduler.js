@@ -10,6 +10,7 @@ import { runAgent, workNextTask, isBusy } from './agents/runner.js';
 import { writeBriefing } from './briefings.js';
 import { budgetStatus } from './ai.js';
 import { weekday } from './time.js';
+import { huddle } from './huddle.js';
 
 const tz = { timezone: config.timezone, protect: true };
 
@@ -116,6 +117,12 @@ export function startScheduler() {
   // Weekly reviews: improvements on Sunday evening (ready for Monday's deep briefing), website on Wednesday.
   new Cron('0 17 * * 0', tz, improvementReview);
   new Cron('0 11 * * 3', tz, websiteReview);
+
+  // A team huddle after lunch on weekdays.
+  new Cron('30 13 * * 1-5', tz, async () => {
+    if (!integrations.ai || getSetting('company_paused', false) || !budgetStatus().routineAllowed) return;
+    try { await huddle(); workQueues(); } catch (err) { console.error(err.message); }
+  });
 
   // Ren's briefings.
   new Cron('0 7 * * *', tz, () => writeBriefing(weekday() === 'Monday' ? 'weekly' : 'morning'));

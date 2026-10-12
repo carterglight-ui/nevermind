@@ -1,6 +1,7 @@
 // The Pokemon-style dialogue box: typewriter text, tap to continue, then a menu with a cursor.
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
+import { game } from '../game.js';
 
 /** Break long text into box-sized pages at word boundaries. */
 export function paginate(text, max = 150) {
@@ -58,7 +59,7 @@ function greeting(person, info) {
 /**
  * target: a roster entry ({id, name, title, active}) or a scripted speaker {id, name, lines}.
  */
-export function Dialogue({ person, onClose, notify, openSheet }) {
+export function Dialogue({ person, onClose, notify, openSheet, onMove, onHuddle }) {
   const [info, setInfo] = useState(null);
   const [pages, setPages] = useState(person.lines || ['…']);
   const [page, setPage] = useState(0);
@@ -67,6 +68,13 @@ export function Dialogue({ person, onClose, notify, openSheet }) {
   const [draft, setDraft] = useState('');
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef();
+
+  // They stop what they're doing and turn to you while you talk.
+  useEffect(() => {
+    if (person.lines) return undefined;
+    game.talkingTo = person.id;
+    return () => { if (game.talkingTo === person.id) game.talkingTo = null; };
+  }, [person.id]);
 
   useEffect(() => {
     if (person.lines) return;
@@ -95,10 +103,13 @@ export function Dialogue({ person, onClose, notify, openSheet }) {
   const options = !person.active || person.lines
     ? [{ label: 'OK', run: onClose }]
     : [
-        person.id === 'ren' && { label: 'GIVE LIST', run: () => { onClose(); openSheet('list'); } },
-        person.id === 'wren' && { label: 'LEAD BOARD', run: () => { onClose(); openSheet('leads'); } },
-        { label: 'TALK', run: () => { setInputFor('talk'); setMode('input'); } },
+        { label: 'ASK', run: () => { setInputFor('talk'); setMode('input'); } },
         { label: 'NEW TASK', run: () => { setInputFor('task'); setMode('input'); } },
+        person.id === 'ren' && { label: 'GIVE LIST', run: () => { onClose(); openSheet('list'); } },
+        person.id === 'ren' && { label: 'TEAM HUDDLE', run: () => { onClose(); onHuddle(); } },
+        person.id === 'ren' && { label: 'BRIEFINGS', run: () => { onClose(); openSheet('briefings'); } },
+        person.id === 'wren' && { label: 'LEAD BOARD', run: () => { onClose(); openSheet('leads'); } },
+        { label: 'MOVE', run: () => { onClose(); onMove(person.id); } },
         { label: 'THEIR WORK', run: () => { onClose(); openSheet('staff', person.id); } },
         working && { label: 'STOP TASK', run: async () => { await api(`/staff/${person.id}/stop`, { method: 'POST' }); refresh(); say('Stopped. Dropping it.'); } },
         paused
@@ -147,7 +158,7 @@ export function Dialogue({ person, onClose, notify, openSheet }) {
         <div className="dlg-name">{speaker}</div>
         {mode === 'input' ? (
           <div className="dlg-input" onClick={(e) => e.stopPropagation()}>
-            <div className="dlg-prompt">{inputFor === 'task' ? `What should ${speaker} do?` : `What do you say to ${speaker}?`}</div>
+            <div className="dlg-prompt">{inputFor === 'task' ? `What should ${speaker} do?` : `What do you want to ask ${speaker}?`}</div>
             <textarea
               id="dlg-text"
               ref={inputRef}

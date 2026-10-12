@@ -111,13 +111,12 @@ button { cursor: pointer; }
 
 .preview-tag {
   position: absolute;
-  left: 50%; bottom: calc(var(--safe-bottom) + 150px);
-  transform: translateX(-50%);
+  left: 14px; bottom: calc(var(--safe-bottom) + 30px);
+  max-width: 44vw; white-space: normal;
   font-family: var(--font-pixel); font-size: 7px; line-height: 1.6;
   background: rgba(35, 35, 43, 0.82); color: var(--paper);
   border: 0; border-radius: 6px;
-  padding: 5px 8px;
-  white-space: nowrap;
+  padding: 6px 8px;
   z-index: 8;
 }
 
@@ -156,7 +155,10 @@ button { cursor: pointer; }
   padding: 3px 5px;
   white-space: nowrap;
   display: flex; align-items: center; gap: 4px;
-  opacity: 0.8;
+  opacity: 0.85;
+  pointer-events: auto;
+  cursor: pointer;
+  color: var(--ink);
 }
 .station-tag.near { opacity: 1; background: var(--paper); box-shadow: 0 0 0 3px var(--alert); }
 .station-tag.alert { opacity: 1; }
@@ -167,46 +169,41 @@ button { cursor: pointer; }
   font-size: 8px;
   animation: bob 0.5s ease-in-out infinite alternate;
 }
-.you-tag { font-family: var(--font-pixel); font-size: 7px; color: var(--ink); background: var(--alert); border: 2px solid var(--ink); border-radius: 3px; padding: 2px 4px; }
+/* unused */ .you-tag { font-family: var(--font-pixel); font-size: 7px; color: var(--ink); background: var(--alert); border: 2px solid var(--ink); border-radius: 3px; padding: 2px 4px; }
 
-/* ---------- Controls ---------- */
-.joystick {
+/* ---------- Talk to Ren, move mode ---------- */
+.ren-btn {
   position: absolute;
-  left: 22px; bottom: calc(var(--safe-bottom) + 26px);
-  width: 112px; height: 112px;
-  border-radius: 50%;
-  background: rgba(35, 35, 43, 0.28);
-  border: 3px solid rgba(35, 35, 43, 0.55);
-  display: grid; place-items: center;
-  touch-action: none;
-  z-index: 12;
-}
-.knob {
-  width: 52px; height: 52px; border-radius: 50%;
-  background: var(--paper);
-  border: 4px solid var(--ink);
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-}
-.a-wrap {
-  position: absolute;
-  right: 24px; bottom: calc(var(--safe-bottom) + 28px);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  z-index: 12;
-}
-.a-btn {
-  width: 84px; height: 84px; border-radius: 50%;
-  font-family: var(--font-pixel); font-size: 22px;
-  background: #b3443e; color: #fbe9e7;
-  border: 4px solid var(--ink);
+  right: 14px; bottom: calc(var(--safe-bottom) + 18px);
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-pixel); font-size: 11px;
+  background: #c98b2e; color: #fff;
+  border: 4px solid var(--ink); border-radius: 14px;
+  padding: 14px 16px;
   box-shadow: 0 5px 0 var(--ink);
-  opacity: 0.55;
+  text-shadow: 1px 1px 0 var(--ink);
+  z-index: 12;
 }
-.a-btn.live { opacity: 1; background: var(--red); animation: pulse 1.2s ease-in-out infinite; }
-.a-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
-@keyframes pulse { 50% { box-shadow: 0 5px 0 var(--ink), 0 0 0 8px rgba(232, 181, 44, 0.45); } }
-.a-label, .a-hint { font-family: var(--font-pixel); font-size: 8px; color: var(--ink); background: rgba(251, 248, 239, 0.9); border-radius: 4px; padding: 3px 5px; }
-.a-hint { max-width: 120px; text-align: center; }
+.ren-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+.ren-face {
+  display: grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #f0c49c; color: var(--ink);
+  border: 3px solid var(--ink);
+  font-family: var(--font-body); font-size: 9px; text-shadow: none;
+}
+.move-hint {
+  position: absolute;
+  left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 16px);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-family: var(--font-dialog); font-size: 22px;
+  background: var(--paper);
+  border: 4px solid var(--ink); border-radius: 10px;
+  box-shadow: inset 0 0 0 2px var(--rule);
+  padding: 10px 12px;
+  z-index: 15;
+  animation: rise 0.2s ease-out;
+}
 
 /* ---------- Dialogue ---------- */
 .dlg-wrap {
@@ -238,7 +235,7 @@ button { cursor: pointer; }
   border-radius: 10px;
   box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 5px var(--rule), 0 4px 0 rgba(35, 35, 43, 0.25);
 }
-.dlg-menu { padding: 10px 6px; min-width: 170px; }
+.dlg-menu { padding: 10px 6px; min-width: 170px; max-height: 46vh; overflow-y: auto; }
 .dlg-menu button, .start-menu button {
   display: flex; align-items: center; gap: 4px;
   font-family: var(--font-pixel); font-size: 11px;

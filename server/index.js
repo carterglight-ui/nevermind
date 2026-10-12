@@ -15,6 +15,7 @@ import { saveSubscription, vapidPublicKey } from './push.js';
 import { syncInbox } from './integrations/gmail.js';
 import { progress } from './progress.js';
 import { intake } from './intake.js';
+import { huddle } from './huddle.js';
 
 if (process.env.NODE_ENV === 'production' && !config.passcode) {
   console.error('APP_PASSCODE must be set in production.');
@@ -300,6 +301,14 @@ app.patch('/api/leads/:id', (req, res) => {
   broadcast('lead', updated);
   res.json(updated);
 });
+app.post('/api/huddle', wrap(async (req, res) => {
+  if (!integrations.ai) return res.status(400).json({ error: "The team can't huddle until their AI is connected." });
+  const meeting = await huddle({ requested: true, topic: String(req.body?.topic || '') });
+  nudge();
+  res.json(meeting);
+}));
+app.get('/api/huddle/last', (req, res) => res.json(getSetting('last_huddle', null)));
+
 app.post('/api/shift/wren', (req, res) => {
   wrenShift('requested').catch((e) => console.error(e));
   res.json({ ok: true });

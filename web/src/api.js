@@ -28,7 +28,7 @@ export async function api(path, { method = 'GET', body } = {}) {
 export function subscribe(onEvent) {
   if (PREVIEW) return preview.subscribe(onEvent);
   const es = new EventSource(`/api/events?key=${encodeURIComponent(getPasscode())}`);
-  for (const type of ['staff', 'task', 'review', 'activity', 'briefing', 'chat', 'company', 'lead', 'todo']) {
+  for (const type of ['staff', 'task', 'review', 'activity', 'briefing', 'chat', 'company', 'lead', 'todo', 'meeting']) {
     es.addEventListener(type, (e) => onEvent(type, JSON.parse(e.data)));
   }
   return () => es.close();

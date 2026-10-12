@@ -23,6 +23,22 @@ export const DESKS = {
   ollie: { pos: [6.1, 1.3], face: -Math.PI / 2 },
 };
 
+// Seats around the meeting table for team huddles.
+export const MEETING_SEATS = [
+  { pos: [-1.35, -0.4], face: Math.PI / 2 },
+  { pos: [1.35, 2.0], face: -Math.PI / 2 },
+  { pos: [-1.35, 2.3], face: Math.PI / 2 },
+  { pos: [1.35, -0.8], face: -Math.PI / 2 },
+  { pos: [0, 3.6], face: Math.PI },
+  { pos: [0, -2.0], face: 0 },
+  { pos: [-1.35, 0.6], face: Math.PI / 2 },
+];
+
+/** Nearest walkable point on the floor (keeps people out of walls and furniture). */
+export function clampToFloor([x, z]) {
+  return [Math.max(-7.2, Math.min(7.2, x)), Math.max(-7.0, Math.min(7.0, z))];
+}
+
 // Places people drift to when they're not busy.
 export const HANGOUTS = [
   [-3.6, 5.0], // coffee bar
@@ -62,7 +78,6 @@ export const STATIONS = {
   leads: { pos: [-7.0, -2.4], r: 1.4, label: 'Lead board', opens: 'leads' },
 };
 
-export const PLAYER_START = [0, 5.2];
 const BOUNDS = { minX: -7.4, maxX: 7.4, minZ: -7.1, maxZ: 7.2 };
 
 // Solid rectangles [minX, maxX, minZ, maxZ] the player can't walk through.

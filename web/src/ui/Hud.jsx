@@ -1,7 +1,7 @@
 import { UNLOCKS } from '../office/Office.jsx';
 
 /** Top of the screen: company level + XP, and today's task bar (Among Us style). */
-export function Hud({ progress, onStart, onMap, map, paused }) {
+export function Hud({ progress, onStart, paused }) {
   const c = progress?.company || { level: 1, xp: 0, floor: 0, next: 40 };
   const t = progress?.today || { done: 0, total: 0 };
   const xpPct = Math.min(100, ((c.xp - c.floor) / Math.max(1, c.next - c.floor)) * 100);
@@ -24,7 +24,6 @@ export function Hud({ progress, onStart, onMap, map, paused }) {
       </div>
       <div className="hud-right">
         <button className="gb-pill" onClick={onStart}>START</button>
-        <button className="gb-pill small" onClick={onMap}>{map ? 'FOLLOW' : 'MAP'}</button>
       </div>
     </header>
   );
