@@ -86,6 +86,7 @@ export const TOOL_DEFS = {
         subject: { type: 'string' },
         body: { type: 'string' },
         why: { type: 'string', description: 'One or two sentences for the owner: why this email, why now.' },
+        lead_id: { type: 'integer', description: 'If this is outreach to a lead on the lead board.' },
       },
       ['to', 'subject', 'body', 'why'],
     ),
@@ -106,10 +107,55 @@ export const TOOL_DEFS = {
     description: "Items waiting in the owner's review inbox, or recently decided ones.",
     input_schema: obj({ status: { type: 'string', enum: ['pending', 'done', 'rejected'] } }),
   },
+  add_lead: {
+    description: 'Save a verified prospect to the lead board. Only real, public business details you confirmed; leave anything unverified blank. Returns the lead id (or says it already exists).',
+    input_schema: obj(
+      {
+        business: { type: 'string' },
+        business_type: { type: 'string', description: 'e.g. car dealership, dentist office' },
+        city: { type: 'string' },
+        website: { type: 'string' },
+        phone: { type: 'string', description: 'Main business line, as published.' },
+        email: { type: 'string', description: 'Public business email, if published.' },
+        contact_name: { type: 'string', description: 'Decision-maker, only if publicly listed.' },
+        contact_role: { type: 'string' },
+        source_url: { type: 'string', description: 'Where you verified the details.' },
+        opportunity: { type: 'string', description: "What their marketing is missing and what the owner could fix. Specific, 1-3 sentences." },
+        warm_paths: { type: 'string', description: 'Natural ways to meet them without a cold pitch, as a short list.' },
+        score: { type: 'integer', minimum: 1, maximum: 5, description: 'Fit: 5 = great prospect.' },
+      },
+      ['business', 'business_type', 'city', 'opportunity'],
+    ),
+  },
+  update_lead: {
+    description: 'Update a lead (fill in details, warm paths, or move its status).',
+    input_schema: obj(
+      {
+        id: { type: 'integer' },
+        status: { type: 'string', enum: ['new', 'drafted', 'contacted', 'meeting', 'won', 'dead'] },
+        phone: { type: 'string' }, email: { type: 'string' }, contact_name: { type: 'string' }, contact_role: { type: 'string' },
+        opportunity: { type: 'string' }, warm_paths: { type: 'string' }, score: { type: 'integer', minimum: 1, maximum: 5 },
+      },
+      ['id'],
+    ),
+  },
+  list_leads: {
+    description: 'The lead board. Use it before researching so you never add a business twice.',
+    input_schema: obj({ status: { type: 'string', enum: ['new', 'drafted', 'contacted', 'meeting', 'won', 'dead'] } }),
+  },
+  add_owner_todo: {
+    description: "Put something on the owner's own list: things only they can do (calls, errands, family, decisions). Not for work the team can do.",
+    input_schema: obj({ text: { type: 'string' }, due: { type: 'string', description: 'YYYY-MM-DD or a short phrase like "this week"' }, note: { type: 'string', description: 'Helpful context or a tip, one sentence.' } }, ['text']),
+  },
+  list_owner_todos: {
+    description: "The owner's own open to-do items.",
+    input_schema: obj({}),
+  },
 };
 
 const SERVER_TOOLS = {
-  web_search: { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+  web_search: { type: 'web_search_20260209', name: 'web_search', max_uses: 8 },
+  web_fetch: { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 8 },
 };
 
 export function toolsFor(staffId) {
@@ -231,7 +277,12 @@ ${e.body}
   },
 
   draft_email(input, ctx) {
-    const review = addReview(ctx, { kind: 'email', title: `Email to ${str(input.to, 120)}`, ...input });
+    const lead = input.lead_id ? get('SELECT * FROM leads WHERE id = ?', input.lead_id) : null;
+    const review = addReview(ctx, { kind: 'email', title: lead ? `Outreach: ${lead.business}` : `Email to ${str(input.to, 120)}`, ...input });
+    if (lead && lead.status === 'new') {
+      run("UPDATE leads SET status = 'drafted', updated_at = datetime('now') WHERE id = ?", lead.id);
+      broadcast('lead', get('SELECT * FROM leads WHERE id = ?', lead.id));
+    }
     log(ctx.staffId, `Drafted email "${review.subject}" for your review`, 'review', ctx.taskId);
     notifyOwner({ title: 'Draft ready for review', body: `${STAFF[ctx.staffId].name}: ${review.subject}`, tag: `review-${review.id}` });
     return `Draft #${review.id} is in the owner's review inbox. It has not been sent.`;
@@ -241,6 +292,56 @@ ${e.body}
     const review = addReview(ctx, input);
     log(ctx.staffId, `Submitted "${review.title}" for your review`, 'review', ctx.taskId);
     return `Submitted as review item #${review.id}.`;
+  },
+
+  add_lead(input, ctx) {
+    const business = str(input.business, 200).trim();
+    if (!business) return 'Error: business name required.';
+    const city = str(input.city, 120).trim();
+    const dup = get('SELECT id FROM leads WHERE lower(business) = lower(?) AND lower(city) = lower(?)', business, city);
+    if (dup) return `Already on the board as lead #${dup.id}.`;
+    const { lastInsertRowid } = run(
+      `INSERT INTO leads (business, business_type, city, website, phone, email, contact_name, contact_role, source_url, opportunity, warm_paths, score, found_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      business, str(input.business_type, 120), city, str(input.website, 300), str(input.phone, 60), str(input.email, 200),
+      str(input.contact_name, 120), str(input.contact_role, 120), str(input.source_url, 500), str(input.opportunity, 2000),
+      str(input.warm_paths, 3000), Math.min(5, Math.max(1, Number(input.score) || 3)), ctx.staffId,
+    );
+    const lead = get('SELECT * FROM leads WHERE id = ?', lastInsertRowid);
+    broadcast('lead', lead);
+    log(ctx.staffId, `Found a lead: ${business} (${city})`, 'lead', ctx.taskId);
+    return `Saved as lead #${lead.id}.`;
+  },
+
+  update_lead(input, ctx) {
+    const lead = get('SELECT * FROM leads WHERE id = ?', input.id);
+    if (!lead) return 'Error: no such lead.';
+    for (const f of ['status', 'phone', 'email', 'contact_name', 'contact_role', 'opportunity', 'warm_paths', 'score']) {
+      if (input[f] !== undefined) run(`UPDATE leads SET ${f} = ?, updated_at = datetime('now') WHERE id = ?`, f === 'score' ? Number(input[f]) : str(input[f], 3000), lead.id);
+    }
+    broadcast('lead', get('SELECT * FROM leads WHERE id = ?', lead.id));
+    return 'Updated.';
+  },
+
+  list_leads(input) {
+    const rows = input.status
+      ? all('SELECT id, business, business_type, city, status, score, contact_name, updated_at FROM leads WHERE status = ? ORDER BY id DESC LIMIT 100', input.status)
+      : all('SELECT id, business, business_type, city, status, score, contact_name, updated_at FROM leads ORDER BY id DESC LIMIT 150');
+    return rows.length ? JSON.stringify(rows) : 'The lead board is empty.';
+  },
+
+  add_owner_todo(input, ctx) {
+    const text = str(input.text, 300).trim();
+    if (!text) return 'Error: text required.';
+    const { lastInsertRowid } = run('INSERT INTO owner_todos (text, due, note) VALUES (?, ?, ?)', text, str(input.due, 60), str(input.note, 500));
+    broadcast('todo', get('SELECT * FROM owner_todos WHERE id = ?', lastInsertRowid));
+    log(ctx.staffId, `Put "${text}" on your list`, 'todo');
+    return 'Added to the owner\'s list.';
+  },
+
+  list_owner_todos() {
+    const rows = all("SELECT id, text, due, note FROM owner_todos WHERE status = 'open' ORDER BY id");
+    return rows.length ? JSON.stringify(rows) : 'Nothing on the owner\'s list.';
   },
 
   list_reviews(input) {

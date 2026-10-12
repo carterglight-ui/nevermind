@@ -25,8 +25,12 @@ async function gather(kind) {
     try { calendar = formatEvents(await upcomingEvents(kind === 'evening' ? 2 : kind === 'weekly' ? 7 : 1)); }
     catch (e) { calendar = `Calendar unavailable (${e.message}).`; }
   }
+  const leads = all(`SELECT business, business_type, city, status FROM leads WHERE created_at >= datetime('now', ?) ORDER BY score DESC`, since);
+  const pipeline = all(`SELECT status, COUNT(*) AS n FROM leads GROUP BY status`);
+  const ownerTodos = all(`SELECT text, due FROM owner_todos WHERE status = 'open' ORDER BY id LIMIT 30`);
+  const ownerDone = get(`SELECT COUNT(*) AS n FROM owner_todos WHERE status = 'done' AND done_at >= datetime('now', ?)`, since).n;
   const newEmails = get(`SELECT COUNT(*) AS n FROM emails WHERE date >= ?`, new Date(Date.now() - hours * 3600e3).toISOString()).n;
-  return { hours, done, failed, open, pending, activity, followups, calendar, newEmails, budget: budgetStatus() };
+  return { hours, done, failed, open, pending, activity, followups, calendar, newEmails, leads, pipeline, ownerTodos, ownerDone, budget: budgetStatus() };
 }
 
 function factsText(d) {
@@ -46,6 +50,13 @@ ${list(d.open, (t) => `- ${t.title} -> ${name(t.assignee)} (${t.status})`)}
 Client follow-ups due within 3 days:
 ${list(d.followups, (c) => `- ${c.name} (${c.stage}) due ${c.next_followup}`)}
 
+New leads Wren found (${d.leads.length}):
+${list(d.leads.slice(0, 12), (l) => `- ${l.business} (${l.business_type}, ${l.city}) [${l.status}]`)}
+Lead pipeline: ${d.pipeline.map((p) => `${p.status} ${p.n}`).join(', ') || 'empty'}
+
+The owner's own list (${d.ownerTodos.length} open, ${d.ownerDone} finished this period):
+${list(d.ownerTodos, (t) => `- ${t.text}${t.due ? ` (due ${t.due})` : ''}`)}
+
 Calendar:
 ${d.calendar}
 
@@ -57,7 +68,7 @@ ${list(d.activity.slice(0, 50), (a) => `- ${a.ts} ${name(a.staff_id)}: ${a.text}
 }
 
 const INSTRUCTIONS = {
-  morning: `Write the owner's MORNING briefing. Cover: what the team did overnight, what needs the owner's approval (most important first), today's calendar, and the 2-4 priorities for today. Under 220 words.`,
+  morning: `Write the owner's MORNING briefing. Cover: what the team did overnight (including new leads), what needs the owner's approval (most important first), today's calendar, the owner's own list for today, and the 2-4 priorities for today. Under 240 words.`,
   weekly: `Write the owner's MONDAY WEEKLY briefing, a deeper look back over the past 7 days. Cover: results by department, client pipeline status, what needs approval, problems or risks, this week's calendar, and the plan for the week with clear priorities. Also one honest sentence on balance (energy, family, rest). Under 450 words.`,
   evening: `Write the owner's EVENING wrap-up. Cover: what was accomplished today, what's still waiting on the owner, anything that didn't go well, and what the team will work on tomorrow/overnight. Under 200 words.`,
 };

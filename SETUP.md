@@ -72,7 +72,12 @@ Railway runs Nevermind HQ around the clock. It costs about $5/month on the Hobby
    GMAIL_ADDRESS             (your Gmail address)
    GMAIL_APP_PASSWORD        (from Step 3)
    GOOGLE_CALENDAR_ICS_URL   (from Step 4)
+   WEBSITE_URL               (your American Optic site address, e.g. https://americanoptic.com)
+   LEAD_AREA                 Jacksonville, Florida
+   LEAD_TARGETS              car dealerships, dentist offices and other local small businesses
    ```
+
+   The last three are optional. `LEAD_AREA` and `LEAD_TARGETS` tell Wren where to look and what kind of businesses to find. `LEADS_PER_SHIFT` (default 4) sets how many she finds each shift.
 
 5. **Add a volume**. This is the office's filing cabinet; without it, everything resets whenever Railway restarts. Right-click the service (or use the **+ / Create** menu) → **Volume**, attach it to the service, and set the **mount path** to `/data`.
 6. **Settings → Networking → Generate Domain**. You'll get an address like `nevermind-production.up.railway.app`.

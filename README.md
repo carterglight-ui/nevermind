@@ -31,8 +31,13 @@ There are two builds of the same game:
 | Master Ren, Director of Life | Working | 7:00 AM briefing (deeper on Mondays), 7:00 PM wrap-up, takes requests and hands them to the right person |
 | Washington Mercer, Chief Career Officer | Working | Shifts around the clock: reads new email, checks the calendar, tracks clients and follow-ups, researches prospects, assigns production work to Milo |
 | Milo Reyes, Producer | Working | Drafts emails, proposals, ad copy, captions and content plans into your Review inbox |
+| Wren Vale, intern | Working (on loan to Washington) | Every weekday: finds and verifies local businesses whose marketing should be better, drafts a cold email for each, and lists natural ways to meet them. Her lead board tracks them from new to won. |
 | Felix Ledger, Ollie Park | In the office, starting Phase 2 | Finance |
-| Cleo March, Wren Vale | In the office, starting Phase 2 | Creative |
+| Cleo March | In the office, starting Phase 2 | Creative |
+
+**Your list.** Hand Ren your to-do list (typed, pasted, or a photo of a handwritten one). He gives the team what they can do and keeps what only you can do on **My List**, with tips. Crossing items off earns the company XP too.
+
+**Weekly reviews.** Sunday evening, Washington looks for the highest-leverage improvements to your business and sends a report (ready for Monday's deep briefing). Wednesday, he reviews your website (`WEBSITE_URL`) and suggests fixes with exact copy.
 
 ## The rules the code enforces
 
@@ -61,6 +66,9 @@ There are two builds of the same game:
 Running locally: `npm install`, copy `.env.example` to `.env` and fill it in, then `npm run build && npm start` and open http://localhost:3000.
 
 ## Coming next
+
+- **LOOP** (your Alfa Dental work app): connect once we know where it keeps its data (a database, an export, or an API), so the team can see your work there.
+- **Website changes**: today the team reviews American Optic and drafts fixes. Next, Milo prepares the actual change on GitHub and it goes live only when you approve it.
 
 - **Phase 2**: Felix and Ollie (USAA balances and transactions, bills calendar, budgets, investing and side-hustle ideas, all suggestions only), Cleo and Wren (screenplays, app and business ideas, research), and image generation for Milo.
 - **Phase 3**: polished characters and animation, voice, approved one-tap posting to Instagram, Facebook, YouTube and TikTok, and simple video edits.

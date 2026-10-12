@@ -1,5 +1,7 @@
 const ITEMS = [
   { id: 'team', label: 'TEAM' },
+  { id: 'list', label: 'MY LIST' },
+  { id: 'leads', label: 'LEADS' },
   { id: 'review', label: 'REVIEW' },
   { id: 'briefings', label: 'BRIEFINGS' },
   { id: 'log', label: 'LOG' },

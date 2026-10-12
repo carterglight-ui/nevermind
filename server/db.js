@@ -128,6 +128,39 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Prospects Wren finds. Only public business contact details.
+CREATE TABLE IF NOT EXISTS leads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  business TEXT NOT NULL,
+  business_type TEXT NOT NULL DEFAULT '',
+  city TEXT NOT NULL DEFAULT '',
+  website TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  contact_name TEXT NOT NULL DEFAULT '',
+  contact_role TEXT NOT NULL DEFAULT '',
+  source_url TEXT NOT NULL DEFAULT '',
+  opportunity TEXT NOT NULL DEFAULT '',       -- what about their marketing could be better
+  warm_paths TEXT NOT NULL DEFAULT '',        -- ways to meet them naturally
+  score INTEGER NOT NULL DEFAULT 3,           -- 1-5 fit
+  status TEXT NOT NULL DEFAULT 'new',         -- new | drafted | contacted | meeting | won | dead
+  found_by TEXT NOT NULL DEFAULT 'wren',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS leads_business ON leads (lower(business), lower(city));
+
+-- Things on the owner's own list that only the owner can do.
+CREATE TABLE IF NOT EXISTS owner_todos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  text TEXT NOT NULL,
+  due TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open',        -- open | done | dropped
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  done_at TEXT
+);
 `);
 
 export const all = (sql, ...params) => db.prepare(sql).all(...params);

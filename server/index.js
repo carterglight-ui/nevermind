@@ -10,10 +10,11 @@ import { addClient, broadcast, ensureStaffRows, allStaffState, staffState, setSt
 import { budgetStatus } from './ai.js';
 import { chatWith, interrupt, interruptTask } from './agents/runner.js';
 import { writeBriefing } from './briefings.js';
-import { startScheduler, washingtonShift, nudge } from './scheduler.js';
+import { startScheduler, washingtonShift, wrenShift, nudge } from './scheduler.js';
 import { saveSubscription, vapidPublicKey } from './push.js';
 import { syncInbox } from './integrations/gmail.js';
 import { progress } from './progress.js';
+import { intake } from './intake.js';
 
 if (process.env.NODE_ENV === 'production' && !config.passcode) {
   console.error('APP_PASSCODE must be set in production.');
@@ -22,7 +23,7 @@ if (process.env.NODE_ENV === 'production' && !config.passcode) {
 
 ensureStaffRows();
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' })); // photos of to-do lists
 
 // ---- Auth: one owner, one passcode ----
 function passcodeOk(given) {
@@ -256,6 +257,54 @@ app.post('/api/shift/washington', (req, res) => {
   washingtonShift('requested').catch((e) => console.error(e));
   res.json({ ok: true });
 });
+// ---- Your list: hand Ren a to-do list; see what's left for you ----
+app.post('/api/intake', wrap(async (req, res) => {
+  if (!integrations.ai) return res.status(400).json({ error: "Ren can't read lists until the team's AI is connected." });
+  const reply = await intake({ text: String(req.body.text || ''), image: req.body.image || null });
+  nudge();
+  res.json({ reply });
+}));
+app.get('/api/todos', (req, res) => {
+  res.json(all("SELECT * FROM owner_todos WHERE status = 'open' OR done_at >= datetime('now', '-2 days') ORDER BY status = 'done', id"));
+});
+app.post('/api/todos', (req, res) => {
+  const text = String(req.body.text || '').trim().slice(0, 300);
+  if (!text) return res.status(400).end();
+  const { lastInsertRowid } = run('INSERT INTO owner_todos (text, due) VALUES (?, ?)', text, String(req.body.due || '').slice(0, 60));
+  const todo = get('SELECT * FROM owner_todos WHERE id = ?', lastInsertRowid);
+  broadcast('todo', todo);
+  res.json(todo);
+});
+app.patch('/api/todos/:id', (req, res) => {
+  const t = get('SELECT * FROM owner_todos WHERE id = ?', req.params.id);
+  if (!t) return res.status(404).end();
+  const status = ['open', 'done', 'dropped'].includes(req.body.status) ? req.body.status : t.status;
+  run(`UPDATE owner_todos SET status = ?, done_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE NULL END WHERE id = ?`, status, status, t.id);
+  if (status === 'done' && t.status !== 'done') log('ren', `You finished "${t.text}"`, 'owner');
+  const todo = get('SELECT * FROM owner_todos WHERE id = ?', t.id);
+  broadcast('todo', todo);
+  res.json(todo);
+});
+
+// ---- Leads ----
+app.get('/api/leads', (req, res) => res.json(all('SELECT * FROM leads ORDER BY status IN (\'won\', \'dead\'), score DESC, id DESC LIMIT 300')));
+app.patch('/api/leads/:id', (req, res) => {
+  const lead = get('SELECT * FROM leads WHERE id = ?', req.params.id);
+  if (!lead) return res.status(404).end();
+  const STAGES = ['new', 'drafted', 'contacted', 'meeting', 'won', 'dead'];
+  if (STAGES.includes(req.body.status) && req.body.status !== lead.status) {
+    run("UPDATE leads SET status = ?, updated_at = datetime('now') WHERE id = ?", req.body.status, lead.id);
+    log(lead.found_by, `${lead.business}: you marked it "${req.body.status}"`, 'lead');
+  }
+  const updated = get('SELECT * FROM leads WHERE id = ?', lead.id);
+  broadcast('lead', updated);
+  res.json(updated);
+});
+app.post('/api/shift/wren', (req, res) => {
+  wrenShift('requested').catch((e) => console.error(e));
+  res.json({ ok: true });
+});
+
 app.post('/api/inbox/sync', wrap(async (req, res) => res.json(await syncInbox())));
 
 app.post('/api/push/subscribe', (req, res) => {

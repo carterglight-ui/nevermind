@@ -13,7 +13,9 @@ import { Hud, LevelUp } from './ui/Hud.jsx';
 import { StartMenu } from './ui/StartMenu.jsx';
 import { Team } from './ui/Team.jsx';
 import { Mail } from './ui/Mail.jsx';
-import { game } from './game.js';
+import { MyList } from './ui/MyList.jsx';
+import { Leads } from './ui/Leads.jsx';
+import { game, getQuality, saveQuality } from './game.js';
 import { STATIONS } from './office/layout.js';
 
 const TUTORIAL_KEY = 'nevermind-tutorial-done';
@@ -26,7 +28,8 @@ const TUTORIAL = {
   lines: [
     "Welcome to Nevermind. I'm Master Ren. This whole company works for one client: you.",
     'Drag the pad at the bottom left to walk. Walk up to anyone and press A to talk.',
-    'Give Washington or Milo real work. When a draft is ready it comes out of the Printer for you to review.',
+    'Hand me your to-do list any time (START, then MY LIST). I give the team what they can do and keep the rest for you.',
+    'Give Washington, Milo or Wren real work. When a draft is ready it comes out of the Printer for you to review.',
     'Every real result earns the company XP. As we level up, so does the office.',
     'Tap START for the team, my briefings and settings. Now, what matters most today?',
   ],
@@ -47,7 +50,7 @@ function Gate({ onDone, error }) {
   );
 }
 
-const SHEET_TITLES = { review: 'PRINTER · REVIEW', briefings: "REN'S BRIEFINGS", log: 'BULLETIN BOARD', mail: 'MAIL TERMINAL', options: 'OPTIONS', team: 'TEAM', staff: '' };
+const SHEET_TITLES = { list: 'MY LIST', leads: "WREN'S LEAD BOARD", review: 'PRINTER · REVIEW', briefings: "REN'S BRIEFINGS", log: 'BULLETIN BOARD', mail: 'MAIL TERMINAL', options: 'OPTIONS', team: 'TEAM', staff: '' };
 
 export function App() {
   const [state, setState] = useState(null);
@@ -61,6 +64,7 @@ export function App() {
   const [tick, setTick] = useState(0);
   const [toast, setToast] = useState('');
   const [levelUp, setLevelUp] = useState(null);
+  const [quality, setQuality] = useState(getQuality);
   const lastLevel = useRef(null);
   const refreshTimer = useRef();
 
@@ -149,6 +153,7 @@ export function App() {
         onSelect={(id) => id && talkTo(id)}
         level={progress?.company.level || 1}
         stationBadges={stationBadges}
+        quality={quality}
       />
 
       <Hud progress={progress} onStart={() => setMenu(true)} onMap={() => setMap(!map)} map={map} paused={state.companyPaused} />
@@ -180,11 +185,25 @@ export function App() {
         <Sheet title={SHEET_TITLES[sheet.name]} onClose={() => setSheet(null)}>
           {sheet.name === 'staff' && <StaffPanel id={sheet.arg} tick={tick} notify={notify} />}
           {sheet.name === 'team' && <Team roster={roster} staff={state.staff} progress={progress} onPick={(id) => openSheet('staff', id)} />}
+          {sheet.name === 'list' && <MyList tick={tick} notify={notify} />}
+          {sheet.name === 'leads' && <Leads tick={tick} notify={notify} />}
           {sheet.name === 'review' && <Inbox tick={tick} notify={notify} />}
           {sheet.name === 'briefings' && <Briefings tick={tick} notify={notify} />}
           {sheet.name === 'log' && <Log tick={tick} onSelect={(id) => openSheet('staff', id)} />}
           {sheet.name === 'mail' && <Mail state={state} notify={notify} />}
-          {sheet.name === 'options' && <More state={state} reload={load} notify={notify} />}
+          {sheet.name === 'options' && (
+            <>
+              <div className="section">
+                <div className="label">Graphics</div>
+                <div className="seg">
+                  {[['high', 'Full quality'], ['saver', 'Battery saver']].map(([q, label]) => (
+                    <button key={q} className={quality === q ? 'on' : ''} onClick={() => { setQuality(q); saveQuality(q); }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              <More state={state} reload={load} notify={notify} />
+            </>
+          )}
         </Sheet>
       )}
 

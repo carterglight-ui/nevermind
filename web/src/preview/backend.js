@@ -13,21 +13,24 @@ const ROSTER = [
   { id: 'felix', name: 'Felix Ledger', title: 'Chief Financial Officer', dept: 'finance', active: false, reportsTo: 'ren' },
   { id: 'ollie', name: 'Ollie Park', title: 'Financial Operations & Systems Analyst', dept: 'finance', active: false, reportsTo: 'felix' },
   { id: 'cleo', name: 'Cleo March', title: 'Chief Creative Officer', dept: 'creative', active: false, reportsTo: 'ren' },
-  { id: 'wren', name: 'Wren Vale', title: 'Creative Researcher & Story Developer', dept: 'creative', active: false, reportsTo: 'cleo' },
+  { id: 'wren', name: 'Wren Vale', title: 'Creative Researcher & Story Developer', dept: 'creative', active: true, reportsTo: 'washington' },
 ];
-const ACTIVE = ['ren', 'washington', 'milo'];
+const ACTIVE = ['ren', 'washington', 'milo', 'wren'];
 const byId = Object.fromEntries(ROSTER.map((r) => [r.id, r]));
 
 const JOBS = {
   ren: { voice: 'Calm, warm, brief. A Shaolin monk who traded mountain solitude for notifications.', job: "You run Nevermind and report directly to the owner. You turn the owner's goals into direction, balance ambition with health, energy and family, and hand work to the right executive with create_task." },
   washington: { voice: 'Stern, clipped former corporate executive. Dry, no-nonsense, secretly proud of the team.', job: "You manage the owner's career: their marketing and advertising clients (car dealerships, dentist offices, small businesses), outreach, proposals and deadlines. You plan the work and hand concrete production work to Milo with create_task." },
   milo: { voice: 'Upbeat agency veteran. Optimistic, energetic, loves a deadline.', job: 'You turn plans into finished work: email drafts (draft_email) and proposals, ad copy, captions, content calendars and outlines (submit_work). You never send or publish anything yourself.' },
+  wren: { voice: 'Deadpan goth intern, quietly caring. Her portfolio was titled "Things That Should Have Been Better."', job: "You're on loan to Washington as lead researcher. In this preview office you have NO web access, so you never invent businesses, phone numbers, emails or names. You add leads (add_lead) only for businesses the owner names. For those you work out what their marketing likely lacks, ways to meet them naturally (warm_paths), and draft a short cold email each (draft_email with lead_id). When asked to find leads without names, submit_work a prospecting plan instead: where and how to find them, search queries, and a reusable cold email." },
 };
 
 function fresh() {
   const t = now();
   return {
-    seq: { task: 1, review: 2, activity: 2, briefing: 2, chat: 1, note: 1 },
+    seq: { task: 1, review: 2, activity: 2, briefing: 2, chat: 1, note: 1, lead: 1, todo: 1 },
+    leads: [],
+    todos: [],
     staff: Object.fromEntries(ROSTER.map((r) => [r.id, { id: r.id, status: 'idle', activity: '', bubble: '', task_id: null, updated_at: t }])),
     tasks: [],
     reviews: [
@@ -56,7 +59,15 @@ let db = load();
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      const base = fresh();
+      saved.leads ??= [];
+      saved.todos ??= [];
+      saved.seq = { ...base.seq, ...saved.seq };
+      saved.staff = { ...base.staff, ...saved.staff };
+      return saved;
+    }
   } catch { /* storage unavailable: start fresh, in memory */ }
   return fresh();
 }
@@ -191,10 +202,44 @@ function toolsFor(id, ctx) {
       },
     },
   };
+  T.add_lead = {
+    name: 'add_lead', description: 'Save a business the OWNER named to the lead board. Leave phone/email/contact blank (no web access here). Returns the lead id.',
+    inputSchema: { type: 'object', properties: { business: { type: 'string' }, business_type: { type: 'string' }, city: { type: 'string' }, opportunity: { type: 'string' }, warm_paths: { type: 'string' }, score: { type: 'integer' } }, required: ['business', 'opportunity'] },
+    execute: (input) => {
+      setStaff(id, { activity: 'Adding a lead to the board' });
+      const dup = db.leads.find((l) => l.business.toLowerCase() === String(input.business).toLowerCase());
+      if (dup) return `already lead #${dup.id}`;
+      const l = { id: db.seq.lead++, business: String(input.business), business_type: String(input.business_type || ''), city: String(input.city || ''), website: '', phone: '', email: '', contact_name: '', contact_role: '', source_url: '', opportunity: String(input.opportunity || ''), warm_paths: String(input.warm_paths || ''), score: Math.min(5, Math.max(1, Number(input.score) || 3)), status: 'new', found_by: id, created_at: now(), updated_at: now() };
+      db.leads.unshift(l);
+      log(id, `Added a lead: ${l.business}`, 'lead', ctx.taskId);
+      emit('lead', l);
+      return `lead #${l.id}`;
+    },
+  };
+  T.add_owner_todo = {
+    name: 'add_owner_todo', description: "Put something on the owner's own list: things only they can do (calls, errands, family, decisions).",
+    inputSchema: { type: 'object', properties: { text: { type: 'string' }, due: { type: 'string' }, note: { type: 'string' } }, required: ['text'] },
+    execute: ({ text, due, note }) => {
+      const t = { id: db.seq.todo++, text: String(text), due: String(due || ''), note: String(note || ''), status: 'open', created_at: now(), done_at: null };
+      db.todos.push(t);
+      log(id, `Put "${t.text}" on your list`, 'todo');
+      emit('todo', t);
+      return 'added';
+    },
+  };
+  T.draft_email.inputSchema.properties.lead_id = { type: 'integer' };
+  const draftEmail = T.draft_email.execute;
+  T.draft_email.execute = (input) => {
+    const out = draftEmail(input);
+    const lead = db.leads.find((l) => l.id === Number(input.lead_id));
+    if (lead && lead.status === 'new') { lead.status = 'drafted'; lead.updated_at = now(); emit('lead', lead); }
+    return out;
+  };
   const names = {
-    ren: ['say', 'create_task', 'save_note'],
+    ren: ['say', 'create_task', 'save_note', 'add_owner_todo', 'submit_work'],
     washington: ['say', 'create_task', 'save_note', 'upsert_client', 'submit_work'],
     milo: ['say', 'create_task', 'save_note', 'draft_email', 'submit_work'],
+    wren: ['say', 'create_task', 'save_note', 'add_lead', 'draft_email', 'submit_work'],
   }[id];
   return names.map((n) => T[n]);
 }
@@ -209,7 +254,7 @@ const ERRORS = {
   tools_unavailable: "This view can't run the team's tools. Open the link in the Claude app or claude.ai.",
 };
 
-async function think(id, prompt, { taskId = null } = {}) {
+async function think(id, prompt, { taskId = null, images } = {}) {
   const sample = await getSample();
   if (!sample) throw new Error('The preview team needs Claude. Open this link in claude.ai or the Claude app.');
   const ctl = new AbortController();
@@ -220,7 +265,7 @@ async function think(id, prompt, { taskId = null } = {}) {
     const tools = toolsFor(id, ctx);
     const canUseTools = Boolean((await sample.limits().catch(() => null))?.tools);
     if (canUseTools) {
-      const { text } = await sample(`${systemText(id)}\n\n---\n\n${prompt}`, { tools, signal: ctl.signal, modelTier: 'default' });
+      const { text } = await sample(`${systemText(id)}\n\n---\n\n${prompt}`, { tools, signal: ctl.signal, modelTier: 'default', ...(images ? { images } : {}) });
       return { text, handoffs: ctx.handoffs };
     }
     // This Claude app can't run page tools: ask for the same actions as one JSON plan, then apply them.
@@ -228,7 +273,7 @@ async function think(id, prompt, { taskId = null } = {}) {
       `${systemText(id)}\n\n---\n\n${prompt}\n\nYou can't call tools directly. Reply with ONLY a JSON object of the actions to take:\n` +
         `{"actions": [{"tool": "<one of: ${tools.map((t) => t.name).join(', ')}>", "input": {...}}], "reply": "<what you say back, 1-3 sentences>"}\n` +
         `Tool inputs:\n${tools.map((t) => `- ${t.name}: ${t.description} Fields: ${Object.keys(t.inputSchema.properties).join(', ')}`).join('\n')}`,
-      { signal: ctl.signal, modelTier: 'default', cache: false },
+      { signal: ctl.signal, modelTier: 'default', cache: false, ...(images ? { images } : {}) },
     );
     for (const a of Array.isArray(plan?.actions) ? plan.actions : []) {
       const tool = tools.find((t) => t.name === a?.tool);
@@ -288,13 +333,31 @@ function progress() {
     if (r.status === 'rejected') staff[r.staff_id].xp += 5;
   }
   staff.ren.xp += db.briefings.filter((b) => !b.title.startsWith('EXAMPLE')).length * 10;
+  const reach = { contacted: 10, meeting: 50, won: 250 };
+  for (const l of db.leads) if (reach[l.status] && staff[l.found_by]) staff[l.found_by].xp += reach[l.status];
+  const ownerDone = db.todos.filter((t) => t.status === 'done').length;
   for (const s of Object.values(staff)) Object.assign(s, levelFor(s.xp));
-  const xp = Object.values(staff).reduce((a, s) => a + s.xp, 0);
+  const xp = Object.values(staff).reduce((a, s) => a + s.xp, 0) + ownerDone * 10;
   const today = new Date().toDateString();
   const isToday = (ts) => new Date(`${ts.replace(' ', 'T')}Z`).toDateString() === today;
   const relevant = db.tasks.filter((t) => t.status !== 'cancelled' && (isToday(t.created_at) || isToday(t.updated_at) || ['queued', 'working'].includes(t.status)));
   return { company: { xp, ...levelFor(xp) }, today: { done: relevant.filter((t) => t.status === 'done').length, total: relevant.length }, staff };
 }
+
+// Same instructions as server/intake.js.
+const TRIAGE = `The owner just handed you their to-do list. Sort every item; skip nothing.
+
+For each item decide:
+- The team can do it (drafting, research, planning, outreach, proposals, content, follow-ups): create_task for the right person with full context.
+  - Washington: anything about clients, the owner's marketing business, career, deals, the owner's website.
+  - Milo: concrete production (emails, proposals, captions, ad copy, presentations, content plans).
+  - Wren: finding prospects and leads, researching businesses or people.
+  - Money or creative items: Felix and Cleo aren't on the clock yet, so create the task for yourself (ren) and handle the thinking and planning part.
+- Only the owner can do it (calls, errands, appointments, family, signing, paying, decisions): add_owner_todo, with a one-line tip that makes it easier where you can.
+- Mixed: split it. The team prepares (e.g. Milo drafts the email), the owner does the last step (sends it).
+
+Keep due dates the owner gave. Note lasting facts you learn (clients, preferences, deadlines) with save_note.
+Then reply to the owner in your own voice, briefly: how many items went where, and anything you need from them.`;
 
 // ---- routes ----
 export async function handle(path, method, body = {}) {
@@ -444,6 +507,57 @@ Company notes:\n${notesText()}`;
     return b;
   }
 
+  if (route === '/intake') {
+    const text = String(body.text || '').trim();
+    let images;
+    if (body.image) {
+      const [head, data] = String(body.image).split(',');
+      const bytes = Uint8Array.from(atob(data || ''), (c) => c.charCodeAt(0));
+      images = [new Blob([bytes], { type: /data:([^;]+)/.exec(head)?.[1] || 'image/jpeg' })];
+    }
+    if (!text && !images) throw new Error('Give Ren a list first.');
+    log('ren', images ? 'Received your list (photo)' : 'Received your list', 'intake');
+    const prompt = `${TRIAGE}${images ? '\n\nThe list is in the attached photo. Read it carefully.' : ''}${text ? `\n\nTHE LIST\n${text.slice(0, 20000)}` : ''}`;
+    let reply;
+    let handoffs = [];
+    try {
+      const r = await think('ren', prompt, { images });
+      reply = r.text || 'Handled.';
+      handoffs = r.handoffs;
+    } catch (e) {
+      if (/image/i.test(e.message)) throw new Error("Photos don't work in this view. Type or paste the list instead.");
+      throw e;
+    }
+    for (const h of handoffs) work(h);
+    return { reply };
+  }
+  if (route === '/todos') {
+    if (M === 'GET') return db.todos.filter((t) => t.status === 'open' || t.status === 'done').slice(-80);
+    const t = { id: db.seq.todo++, text: String(body.text || '').slice(0, 300), due: String(body.due || ''), note: '', status: 'open', created_at: now(), done_at: null };
+    db.todos.push(t);
+    emit('todo', t);
+    return t;
+  }
+  if (seg[0] === 'todos' && seg[1]) {
+    const t = db.todos.find((x) => x.id === Number(seg[1]));
+    if (!t) throw new Error('No such item');
+    if (['open', 'done', 'dropped'].includes(body.status)) {
+      if (body.status === 'done' && t.status !== 'done') log('ren', `You finished "${t.text}"`, 'owner');
+      t.status = body.status;
+      t.done_at = body.status === 'done' ? now() : null;
+    }
+    emit('todo', t);
+    return t;
+  }
+  if (route === '/leads') return db.leads;
+  if (seg[0] === 'leads' && seg[1]) {
+    const l = db.leads.find((x) => x.id === Number(seg[1]));
+    if (!l) throw new Error('No such lead');
+    if (['new', 'drafted', 'contacted', 'meeting', 'won', 'dead'].includes(body.status)) { l.status = body.status; l.updated_at = now(); log(l.found_by, `${l.business}: you marked it "${l.status}"`, 'lead'); }
+    emit('lead', l);
+    return l;
+  }
+
   if (route === '/activity') return db.activity.slice(0, Number(q.get('limit')) || 150);
   if (route === '/clients') return db.clients;
   if (route === '/notes') {
@@ -458,7 +572,7 @@ Company notes:\n${notesText()}`;
   if (route === '/company/pause') { db.settings.company_paused = true; for (const c of running.values()) c.abort(); emit('company', { paused: true }); return { paused: true }; }
   if (route === '/company/resume') { db.settings.company_paused = false; emit('company', { paused: false }); for (const t of db.tasks.filter((x) => x.status === 'queued')) work(t.id); return { paused: false }; }
   if (route === '/usage') return { monthlyBudget: 0, spentMonth: 0, spentToday: 0, dailyAllowance: 0, byStaff: [], routineAllowed: true, priorityAllowed: true };
-  if (route === '/shift/washington' || route === '/inbox/sync') throw new Error('Email is not connected in the preview office.');
+  if (route === '/shift/washington' || route === '/inbox/sync' || route === '/shift/wren') throw new Error('Email is not connected in the preview office.');
   throw new Error(`Not available in the preview: ${route}`);
 }
 

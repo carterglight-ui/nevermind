@@ -35,6 +35,12 @@ export const config = {
   vapidContact: env.VAPID_CONTACT || (env.GMAIL_ADDRESS ? `mailto:${env.GMAIL_ADDRESS}` : 'mailto:owner@example.com'),
 
   ownerName: env.OWNER_NAME || 'the client',
+  // Where Wren looks for leads, and what kind of businesses.
+  leadArea: env.LEAD_AREA || 'Jacksonville, Florida',
+  leadTargets: env.LEAD_TARGETS || 'car dealerships, dentist offices and other local small businesses',
+  leadsPerShift: Number(env.LEADS_PER_SHIFT || 4),
+  // The owner's own website, reviewed weekly.
+  websiteUrl: env.WEBSITE_URL || '',
 };
 
 export const integrations = {

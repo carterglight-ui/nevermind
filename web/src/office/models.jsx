@@ -1,8 +1,9 @@
 // The chibi figures from the concept art, built from simple shapes.
 import { useEffect, useState } from 'react';
 
+// Glossy vinyl-toy finish, like the concept art figures.
 export function mat(color, opts = {}) {
-  return <meshStandardMaterial color={color} roughness={0.75} {...opts} />;
+  return <meshPhysicalMaterial color={color} roughness={0.5} clearcoat={0.55} clearcoatRoughness={0.35} envMapIntensity={0.8} {...opts} />;
 }
 
 function Hair({ look }) {

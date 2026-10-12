@@ -461,3 +461,44 @@ label input { margin-top: 3px; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- My list ---------- */
+.photo-chip { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.photo-chip img { width: 72px; height: 72px; object-fit: cover; border: 3px solid var(--ink); border-radius: 6px; }
+.ren-reply { margin-top: 12px; max-width: 100%; }
+.todo {
+  display: flex; gap: 10px; align-items: flex-start; width: 100%;
+  background: #fff; border: 3px solid var(--ink); border-radius: 8px;
+  padding: 10px; margin-top: 8px; text-align: left;
+}
+.todo .box { width: 22px; height: 22px; border: 3px solid var(--ink); border-radius: 4px; flex-shrink: 0; display: grid; place-items: center; font-size: 13px; background: var(--paper); }
+.todo.done { opacity: 0.6; }
+.todo.done .box { background: var(--hp); }
+.todo.done .todo-text { text-decoration: line-through; }
+.todo-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.todo-due { color: var(--muted); font-size: 13px; }
+.todo-note { font-size: 13px; color: #4d4a44; font-style: italic; }
+
+/* ---------- Lead board ---------- */
+.pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 4px 0 12px; }
+.pipe { background: #fff; border: 3px solid var(--ink); border-radius: 6px; padding: 6px 2px; text-align: center; display: flex; flex-direction: column; gap: 3px; }
+.pipe b { font-family: var(--font-pixel); font-size: 13px; }
+.pipe span { font-size: 10px; color: var(--muted); line-height: 1.1; }
+.lead { padding: 0; }
+.lead-head { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px; background: none; border: 0; text-align: left; }
+.lead-name { font-weight: 700; }
+.lead-meta { font-size: 13px; color: var(--muted); }
+.lead-row { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+.stars { color: var(--alert); letter-spacing: 1px; text-shadow: 0 1px 0 var(--ink); }
+.lead-body { padding: 0 12px 12px; font-size: 14px; line-height: 1.45; }
+.lead-body p { margin: 6px 0; }
+.lead-body .warm { white-space: pre-wrap; background: var(--paper); border-radius: 6px; padding: 8px; }
+.contact { display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; margin: 8px 0; }
+.contact dt { color: var(--muted); font-size: 12px; }
+.contact dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.contact a { color: var(--rule); }
+.linkish { background: none; border: 0; padding: 0; color: var(--rule); text-decoration: underline; font: inherit; }
+.tag.stage-meeting { background: #fff1c9; }
+.tag.stage-won { background: var(--hp); }
+.tag.stage-contacted { background: #dce6fb; }
+.lead.s-dead { opacity: 0.55; }

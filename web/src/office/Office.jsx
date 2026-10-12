@@ -1,25 +1,43 @@
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { MeshReflectorMaterial, Environment, Lightformer } from '@react-three/drei';
 import * as THREE from 'three';
 import { Character, Player } from './Character.jsx';
 import { BubbleProjector, BubbleLayer } from './Bubbles.jsx';
 import { ROOMS, DESKS, STATIONS } from './layout.js';
 import { game } from '../game.js';
 
-const GLASS = { color: '#cfe3f5', transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.1, depthWrite: false };
+const GLASS = { color: '#d6e8f7', transparent: true, opacity: 0.16, roughness: 0.02, metalness: 0.3, envMapIntensity: 1.5, depthWrite: false };
 const FRAME = '#3a3f4a';
 
-function Floor() {
+/** Polished stone floor that reflects the room, like the concept renders. */
+function Floor({ hq }) {
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[15.5, 16]} />
-        <meshStandardMaterial color="#c9ced8" roughness={0.35} metalness={0.15} />
+        {hq ? (
+          <MeshReflectorMaterial
+            color="#aeb7c7"
+            roughness={0.35}
+            metalness={0.1}
+            blur={[260, 80]}
+            resolution={512}
+            mixBlur={1}
+            mixStrength={0.55}
+            mirror={0.55}
+            depthScale={0.6}
+            minDepthThreshold={0.4}
+            maxDepthThreshold={1.2}
+          />
+        ) : (
+          <meshStandardMaterial color="#c9ced8" roughness={0.3} metalness={0.15} />
+        )}
       </mesh>
       {/* centre rug, like the concept art */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 1]} receiveShadow>
         <planeGeometry args={[5.5, 7.5]} />
-        <meshStandardMaterial color="#5c6f99" roughness={0.95} />
+        <meshStandardMaterial color="#56699a" roughness={0.95} />
       </mesh>
       {/* tile lines */}
       {Array.from({ length: 7 }).map((_, i) => (
@@ -247,7 +265,80 @@ function Blimp() {
 }
 
 /** The city outside, quietly falling apart. */
+/** A tiling texture of office windows, some lit by the sunset. */
+function useWindowTexture() {
+  return useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, 64, 128);
+    let seed = 3;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let y = 4; y < 128; y += 8) {
+      for (let x = 4; x < 64; x += 10) {
+        const lit = rand();
+        g.fillStyle = lit > 0.86 ? '#fff1c8' : lit > 0.5 ? '#b9c6dc' : '#9fb0cb';
+        g.fillRect(x, y, 6, 5);
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, []);
+}
+
+/** Sky dome: deep blue overhead fading to a warm sunset at the horizon. */
+function SkyDome() {
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        uniforms: { top: { value: new THREE.Color('#6f97d8') }, mid: { value: new THREE.Color('#b9cdee') }, horizon: { value: new THREE.Color('#f6d2b2') }, below: { value: new THREE.Color('#7f93b8') } },
+        vertexShader: 'varying vec3 vPos; void main() { vPos = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader:
+          // Below the horizon is city haze, not sky (you look down past the building a lot).
+          'uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 below; varying vec3 vPos; void main() { float h = vPos.y; vec3 c = h < 0.0 ? mix(horizon, below, smoothstep(0.0, -0.12, h)) : h < 0.12 ? mix(horizon, mid, smoothstep(0.0, 0.12, h)) : mix(mid, top, smoothstep(0.12, 0.7, h)); gl_FragColor = vec4(c, 1.0); }',
+      }),
+    [],
+  );
+  return (
+    <mesh material={material}>
+      <sphereGeometry args={[150, 32, 16]} />
+    </mesh>
+  );
+}
+
+/** The low sun with a soft glow, back right, as in the concept art. */
+function Sun() {
+  const glow = useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const r = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+    r.addColorStop(0, 'rgba(255,248,225,1)');
+    r.addColorStop(0.25, 'rgba(255,226,170,0.75)');
+    r.addColorStop(1, 'rgba(255,200,140,0)');
+    g.fillStyle = r;
+    g.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, []);
+  return (
+    <group position={[34, 6, -70]}>
+      <sprite scale={[34, 34, 1]}><spriteMaterial map={glow} transparent depthWrite={false} fog={false} /></sprite>
+      <mesh><sphereGeometry args={[3.2, 24, 16]} /><meshBasicMaterial color="#fff6e0" fog={false} /></mesh>
+    </group>
+  );
+}
+
 function Skyline() {
+  const windows = useWindowTexture();
   const buildings = useMemo(() => {
     const out = [];
     let seed = 7;
@@ -256,7 +347,7 @@ function Skyline() {
       for (let i = 0; i < 26; i++) {
         const x = -50 + i * 4 + rand() * 2;
         const h = 6 + rand() * (row === 2 ? 30 : 18);
-        out.push({ x, z: -20 - row * 10 - rand() * 3, w: 2 + rand() * 2.5, h, shade: 0.55 + row * 0.12 + rand() * 0.08 });
+        out.push({ x, z: -20 - row * 10 - rand() * 3, w: 2 + rand() * 2.5, h, shade: 0.42 + row * 0.1 + rand() * 0.08 });
       }
     }
     return out;
@@ -266,7 +357,13 @@ function Skyline() {
       {buildings.map((b, i) => (
         <mesh key={i} position={[b.x, b.h / 2 - 14, b.z]}>
           <boxGeometry args={[b.w, b.h, b.w]} />
-          <meshStandardMaterial color={new THREE.Color().setHSL(0.6, 0.35, b.shade)} roughness={0.9} />
+          <meshStandardMaterial
+            color={new THREE.Color().setHSL(0.6, 0.32, b.shade)}
+            map={windows}
+            map-repeat={[Math.max(1, Math.round(b.w / 1.2)), Math.max(1, Math.round(b.h / 2.4))]}
+            roughness={0.6}
+            metalness={0.2}
+          />
         </mesh>
       ))}
       <Crumbling position={[-14, -10, -26]} />
@@ -373,6 +470,7 @@ function Stations({ level }) {
   const [bx, bz] = STATIONS.briefing.pos;
   const [lx, lz] = STATIONS.log.pos;
   const [mx, mz] = STATIONS.mail.pos;
+  const [wx, wz] = STATIONS.leads.pos;
   return (
     <group>
       {/* printer: drafts come out here */}
@@ -399,6 +497,15 @@ function Stations({ level }) {
       <group position={[mx, 0, mz]} rotation={[0, -Math.PI / 2, 0]}>
         <mesh position={[0, 0.55, 0]} castShadow><boxGeometry args={[0.6, 1.1, 0.4]} /><meshStandardMaterial color="#2a2f38" /></mesh>
         <mesh position={[0, 0.95, 0.205]}><planeGeometry args={[0.46, 0.3]} /><meshStandardMaterial color="#7fd3a0" emissive="#3fa36b" emissiveIntensity={0.6} /></mesh>
+      </group>
+      {/* Wren's lead whiteboard */}
+      <group position={[wx - 0.3, 0, wz]} rotation={[0, Math.PI / 2, 0]}>
+        <mesh position={[0, 1.35, 0]} castShadow><boxGeometry args={[1.7, 1.05, 0.05]} /><meshStandardMaterial color="#f7f7f4" roughness={0.2} /></mesh>
+        <mesh position={[0, 1.35, -0.01]}><boxGeometry args={[1.8, 1.15, 0.03]} /><meshStandardMaterial color="#9aa0aa" metalness={0.5} /></mesh>
+        {[[-0.5, 1.6, '#d63a2f'], [0, 1.6, '#e8b52c'], [0.5, 1.6, '#3fc35a'], [-0.5, 1.2, '#5a6fc0'], [0.2, 1.15, '#d63a2f']].map(([x, y, c], i) => (
+          <mesh key={i} position={[x, y, 0.03]}><planeGeometry args={[0.32, 0.22]} /><meshStandardMaterial color={c} /></mesh>
+        ))}
+        {[-0.75, 0.75].map((x) => <mesh key={x} position={[x, 0.42, 0]}><cylinderGeometry args={[0.03, 0.03, 0.84, 8]} /><meshStandardMaterial color="#3a3e47" /></mesh>)}
       </group>
       <Decor level={level} />
     </group>
@@ -457,7 +564,8 @@ function Decor({ level }) {
   );
 }
 
-export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1, stationBadges = {} }) {
+export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1, stationBadges = {}, quality = 'high' }) {
+  const hq = quality === 'high';
   const stateById = Object.fromEntries(staff.map((s) => [s.id, s]));
   // Shared between the 3D scene (head positions) and the HTML bubble layer.
   const anchors = useMemo(() => ({}), []);
@@ -465,32 +573,41 @@ export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1
   return (
     <>
     <Canvas
-      shadows
-      dpr={[1, 2]}
+      shadows="soft"
+      dpr={hq ? [1, 2] : [1, 1.25]}
+      gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.88 }}
       camera={{ fov: 40, near: 0.5, far: 200, position: [0, 14, 16] }}
       onPointerMissed={() => onSelect(null)}
       onCreated={({ gl }) => gl.setClearColor('#bcd0ee')}
       style={{ position: 'absolute', inset: 0 }}
     >
       <color attach="background" args={['#bcd0ee']} />
-      <fog attach="fog" args={['#cfd9ee', 30, 75]} />
+      <fog attach="fog" args={['#d6d6e8', 34, 95]} />
       <CameraRig />
-      <hemisphereLight args={['#eaf1ff', '#9aa3b5', 0.9]} />
+      <SkyDome />
+      <Sun />
+      {/* Studio-style reflections for the glossy figures and glass, built locally (no downloads). */}
+      <Environment resolution={hq ? 256 : 64} frames={1}>
+        <Lightformer form="rect" intensity={1.4} color="#ffe2bf" position={[10, 6, -8]} scale={[12, 6, 1]} />
+        <Lightformer form="rect" intensity={0.7} color="#cfe0ff" position={[-10, 8, 6]} scale={[10, 8, 1]} />
+        <Lightformer form="ring" intensity={0.9} color="#ffffff" position={[0, 12, 0]} scale={6} />
+      </Environment>
+      <hemisphereLight args={['#eef3ff', '#8f96a8', 0.55]} />
+      {/* warm sunset key light from the back right */}
       <directionalLight
-        position={[14, 18, 6]}
-        intensity={1.6}
-        color="#ffe2bf"
+        position={[14, 16, -6]}
+        intensity={2.1}
+        color="#ffd9ad"
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-bias={-0.0004}
+        shadow-mapSize={hq ? [2048, 2048] : [1024, 1024]}
         shadow-camera-left={-16}
         shadow-camera-right={16}
         shadow-camera-top={12}
         shadow-camera-bottom={-12}
       />
-      <mesh position={[30, 9, -60]}>
-        <sphereGeometry args={[3, 24, 16]} />
-        <meshBasicMaterial color="#fff2cf" />
-      </mesh>
+      {/* cool fill from the front left so faces aren't lost in shadow */}
+      <directionalLight position={[-8, 10, 12]} intensity={0.55} color="#cddcff" />
       <Skyline />
       <Blimp />
       <WindowWall />
@@ -505,7 +622,7 @@ export function Office({ roster, staff, selected, talkingTo, onSelect, level = 1
           <meshBasicMaterial color="#5d7199" />
         </mesh>
       ))}
-      <Floor />
+      <Floor hq={hq} />
       <Furniture />
       {roster.map((p) => (
         <Character key={p.id} id={p.id} active={p.active} state={stateById[p.id]} selected={selected === p.id} talking={talkingTo === p.id} onSelect={onSelect} anchors={anchors} />

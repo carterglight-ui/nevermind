@@ -29,7 +29,7 @@ export const HANGOUTS = [
   [-2.8, 4.6],
   [3.8, 5.2], // by the front glass
   [6.3, -2.0],
-  [-6.3, -2.0],
+  [-5.6, -2.2],
   [0, 3.9],
   [3.0, 2.6],
   [-3.6, 1.6],
@@ -59,6 +59,7 @@ export const STATIONS = {
   briefing: { pos: [0, -2.45], r: 1.3, label: "Ren's scroll", opens: 'briefings' },
   log: { pos: [-7.2, 3.6], r: 1.4, label: 'Bulletin board', opens: 'log' },
   mail: { pos: [7.1, 4.2], r: 1.4, label: 'Mail terminal', opens: 'mail' },
+  leads: { pos: [-7.0, -2.4], r: 1.4, label: 'Lead board', opens: 'leads' },
 };
 
 export const PLAYER_START = [0, 5.2];

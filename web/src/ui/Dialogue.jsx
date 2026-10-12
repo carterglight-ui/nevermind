@@ -33,11 +33,13 @@ const EMPTY_LINES = {
   ren: 'Welcome back. What matters most today?',
   washington: "Pipeline doesn't build itself. What do you need?",
   milo: 'Ready when you are! Got something for me to make?',
+  wren: "Found some businesses that should've done better. Want to see?",
 };
 const ACK = {
   ren: "Understood. I'll see that it gets done.",
   washington: 'Noted. Consider it handled.',
   milo: "On it! You'll find it at the Printer when it's ready.",
+  wren: 'Fine. I will make it less terrible.',
 };
 
 function greeting(person, info) {
@@ -93,6 +95,8 @@ export function Dialogue({ person, onClose, notify, openSheet }) {
   const options = !person.active || person.lines
     ? [{ label: 'OK', run: onClose }]
     : [
+        person.id === 'ren' && { label: 'GIVE LIST', run: () => { onClose(); openSheet('list'); } },
+        person.id === 'wren' && { label: 'LEAD BOARD', run: () => { onClose(); openSheet('leads'); } },
         { label: 'TALK', run: () => { setInputFor('talk'); setMode('input'); } },
         { label: 'NEW TASK', run: () => { setInputFor('task'); setMode('input'); } },
         { label: 'THEIR WORK', run: () => { onClose(); openSheet('staff', person.id); } },

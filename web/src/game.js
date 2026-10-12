@@ -36,3 +36,12 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('blur', () => { keys.clear(); update(); });
 }
+
+// Graphics quality, remembered on this phone. 'high' or 'saver'.
+const GFX_KEY = 'nevermind-gfx';
+export function getQuality() {
+  try { return localStorage.getItem(GFX_KEY) || 'high'; } catch { return 'high'; }
+}
+export function saveQuality(q) {
+  try { localStorage.setItem(GFX_KEY, q); } catch { /* fine */ }
+}
